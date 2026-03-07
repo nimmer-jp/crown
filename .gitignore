@@ -1,0 +1,33 @@
+# Compiled Nim binaries
+bin/
+*.out
+crown
+
+# Nim cache directories
+.nimcache/
+nimcache/
+
+# Basolato specific
+.env
+db.sqlite3
+
+# Crown framework generated files (if any)
+example/src/main.nim
+example/src/routes.nim
+example/src/main
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Editor directories and files
+.idea/
+.vscode/
+*.swp
+*~
+*.swo
