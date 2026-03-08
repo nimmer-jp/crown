@@ -24,14 +24,16 @@ proc postParams*(r: Request): Params = r.params
 proc queryParams*(r: Request): Params = r.params
 
 # Procedures manually exported
-export controller.Http200
 export controller.newHttpHeaders
 export controller.getStr
 export controller.getOrDefault
 export basolatoResponse.body
 
-const buildCmd = "nim js -d:release --hints:off -o:" & currentSourcePath().parentDir() /
-    "client.js" & " " & currentSourcePath().parentDir() / "client.nim"
+type Layout* = string
+
+const clientJsPath = currentSourcePath().parentDir() / "client.js"
+const clientNimPath = currentSourcePath().parentDir() / "client.nim"
+const buildCmd = "nim js -d:release --hints:off -o:" & clientJsPath & " " & clientNimPath
 const _ {.used.} = staticExec(buildCmd)
 const clientJsCode = staticRead("client.js")
 
@@ -85,6 +87,17 @@ proc jsonResponse*(data: JsonNode, status = Http200): Response =
   var headers = newHttpHeaders()
   headers["Content-Type"] = "application/json; charset=utf-8"
   return Response.new(status, $data, headers)
+
+proc disableLayout*(res: var Response): var Response =
+  ## Explicitly disables the layout injection for this response.
+  res.headers["Crown-Disable-Layout"] = "true"
+  return res
+
+proc disableLayout*(res: Response): Response =
+  ## Explicitly disables the layout injection for this response.
+  var clonedHeaders = res.headers
+  clonedHeaders["Crown-Disable-Layout"] = "true"
+  return Response.new(res.status, res.body(), clonedHeaders)
 
 template html*(s: untyped): string =
   ## Combines string interpolation.
