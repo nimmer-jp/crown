@@ -1,7 +1,7 @@
 # Compiled Nim binaries
-bin/
+/bin/
 *.out
-crown
+/crown
 
 # Nim cache directories
 .nimcache/
