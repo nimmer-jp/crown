@@ -6,15 +6,16 @@ crown
 # Nim cache directories
 .nimcache/
 nimcache/
+**/.nimcache-run/
 
 # Basolato specific
 .env
 db.sqlite3
+**/logs/
+tmp/
 
-# Crown framework generated files (if any)
-example/src/main.nim
-example/src/routes.nim
-example/src/main
+# Crown framework generated files
+**/.crown/
 
 # OS generated files
 .DS_Store
@@ -31,3 +32,5 @@ Thumbs.db
 *.swp
 *~
 *.swo
+
+.crown/
