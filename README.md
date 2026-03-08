@@ -49,13 +49,15 @@ my_awesome_app/
 ├── crown.json           # Configuration
 ├── src/
 │   └── app/
-│       ├── layout.nim   # Wraps all child pages globally
-│       ├── page.nim     # Automatically maps to GET `/`
+│       ├── layout/
+│       │   ├── layout.nim # Default layout (wraps pages by default)
+│       │   └── admin.nim  # Custom "admin" layout
+│       ├── page.nim       # Automatically maps to GET `/`
 │       ├── editor/
-│       │   └── page.nim # Automatically maps to GET `/editor`
+│       │   └── page.nim   # Automatically maps to GET `/editor`
 │       └── api/
-│           └── save.nim # Automatically maps to POST/GET `/api/save`
-└── public/              # Static assets
+│           └── save.nim   # Automatically maps to POST/GET `/api/save`
+└── public/                # Static assets
 ```
 
 > **Warning**: Never manually create `src/main.nim` or `src/routes.nim`. Crown generates highly-optimized routing logic automatically in the hidden `.crown/` directory for you.
@@ -85,20 +87,29 @@ proc post*(req: Request): string =
 proc page*(req: Request): string =
   let initialContent = "Start typing here..."
 
-  # The output of this function is automatically injected into `layout.nim`
+  # By default, the output is injected into `src/app/layout/layout.nim`
   return html"""
     <div class="tiara-container">
-      <h1>Crown Editor</h1>
-
-      <!-- Send a POST request async and swap only the #save-status div -->
-      <form crown-post="/editor" crown-target="#save-status" crown-swap="innerHTML">
-        ${Textarea(name="content", value=initialContent)}
-        ${Button(text="Save", type="submit", color="primary")}
-      </form>
-
-      <div id="save-status"></div>
+      ...
     </div>
   """
+
+# 3. Handle GET requests with Custom Layout
+proc page*(req: Request, layout: Layout = "admin"): string =
+  # Explicitly using "admin" maps to `src/app/layout/admin.nim`
+  return html"""
+    <div>Admin Dashboard</div>
+  """
+```
+
+## 📂 Layout System
+
+Crown provides a centralized layout system in `src/app/layout/`.
+
+- **Default Layout**: Any `page` function without a custom layout parameter is automatically wrapped by `src/app/layout/layout.nim`.
+- **Custom Layouts**: You can specify a layout by adding a second parameter to your `page` function: `proc page*(req: Request, layout: Layout = "admin")`. This will look for `src/app/layout/admin.nim`.
+- **Disable Layout**: If you want to return a raw snippet without any layout (e.g., for HTMX parts), use `res.disableLayout()` or handle it via `post` routes which don't apply layouts by default.
+
 ```
 
 ## 🛠 Command Line Interface
@@ -116,3 +127,4 @@ We welcome contributions to make Crown the ultimate full-stack framework for Nim
 ## 📄 License
 
 This project is licensed under the MIT License.
+```
