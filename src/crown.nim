@@ -37,7 +37,7 @@ proc init*() =
       srcDir        = "src"
 
       requires "nim >= 2.2.0"
-      requires "basolato >= 0.15.0"
+      requires "https://github.com/itsumura-h/nim-basolato >= 0.15.0"
       requires "https://github.com/nimmer-jp/tiara >= 0.1.0"
       """
     writeFile("crown.nimble", nimbleContent)

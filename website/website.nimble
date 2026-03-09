@@ -6,4 +6,5 @@ srcDir        = "src"
 
 requires "nim >= 2.0.0"
 requires "https://github.com/itsumura-h/nim-basolato"
+requires "crown >= 0.1.0"
 # ../../src パスへの依存は nim.cfg で解決

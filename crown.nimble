@@ -11,6 +11,6 @@ bin           = @["crown"]
 # Dependencies
 
 requires "nim >= 2.0.0"
-requires "basolato"
+requires "https://github.com/itsumura-h/nim-basolato"
 requires "cligen"
 requires "https://github.com/nimmer-jp/tiara"
