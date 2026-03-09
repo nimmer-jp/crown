@@ -6,6 +6,7 @@ description   = "Next generation meta-framework for Nim, powered by Basolato and
 license       = "MIT"
 srcDir        = "src"
 installExt    = @["nim"]
+skipDirs      = @["website", "example"]
 bin           = @["crown"]
 
 # Dependencies
