@@ -15,6 +15,9 @@ proc buildAndRunServer*(appDir, outDir, mainPath: string): Process =
   styledEcho fgYellow, "\n👑 Rebuilding Crown App..."
   createDir(outDir)
 
+  # Generate PWA Files
+  generatePWAFiles()
+
   # Regenerate routes
   let routesCode = generateRoutesCode(appDir)
   writeFile(outDir / "routes.nim", routesCode)

@@ -50,12 +50,14 @@ const crownClientJs = """
 """ & clientJsCode & "\n</script>\n"
 
 proc getCrownConfig(): JsonNode =
-  result = %*{"tailwind": true}
+  result = %*{"tailwind": true, "pwa": false}
   if fileExists("crown.json"):
     try:
       let j = parseFile("crown.json")
       if j.hasKey("tailwind"):
         result["tailwind"] = j["tailwind"]
+      if j.hasKey("pwa"):
+        result["pwa"] = j["pwa"]
     except:
       discard
 
@@ -65,6 +67,30 @@ proc injectCrownSystem*(content: string): string =
   let config = getCrownConfig()
   if config["tailwind"].getBool(true):
     injectStr &= "<script src=\"https://cdn.tailwindcss.com\"></script>\n"
+
+  if config["pwa"].getBool(false):
+    injectStr &= "<link rel=\"manifest\" href=\"/manifest.json\">\n"
+    injectStr &= "<script>\n"
+    injectStr &= "  if ('serviceWorker' in navigator) {\n"
+    injectStr &= "    window.addEventListener('load', () => {\n"
+    injectStr &= "      navigator.serviceWorker.register('/sw.js').then(reg => {\n"
+    injectStr &= "        const syncIfOnline = () => {\n"
+    injectStr &= "          if ('sync' in reg) { reg.sync.register('crown-sync').catch(() => {}); }\n"
+    injectStr &= "          else if (navigator.serviceWorker.controller) { navigator.serviceWorker.controller.postMessage({type: 'FLUSH_QUEUE'}); }\n"
+    injectStr &= "        };\n"
+    injectStr &= "        window.addEventListener('online', syncIfOnline);\n"
+    injectStr &= "      });\n"
+    injectStr &= "    });\n"
+    injectStr &= "  }\n"
+    injectStr &= "</script>\n"
+  else:
+    injectStr &= "<script>\n"
+    injectStr &= "  if ('serviceWorker' in navigator) {\n"
+    injectStr &= "    navigator.serviceWorker.getRegistrations().then(function(registrations) {\n"
+    injectStr &= "      for(let registration of registrations) { registration.unregister(); }\n"
+    injectStr &= "    });\n"
+    injectStr &= "  }\n"
+    injectStr &= "</script>\n"
 
   let lowerContent = content.toLowerAscii()
   let headIdx = lowerContent.find("</head>")

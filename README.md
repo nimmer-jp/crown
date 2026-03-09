@@ -20,6 +20,7 @@ Crown is a next-generation meta-framework for the [Nim](https://nim-lang.org/) p
 - **Solid Bedrock**: We didn't reinvent the wheel. Crown is built upon **[Basolato](https://github.com/itsumura-h/nim-basolato)**, leveraging its battle-tested HTTP server, security, and session management capabilities—completely abstracted away for your convenience.
 - **Component Co-location**: No templating black magic. Write your views and your backend logic cleanly together in the same `.nim` file using native procs and the `html""" """` macro.
 - **Tailwind CSS Ready**: Crown automatically injects Tailwind CSS by default, enabling you to style your application instantly without complex build pipelines.
+- **Zero-Config PWA**: Automatically generates a Service Worker, manifest, and offline fallback (including Background Sync for API requests) with a single flip of a flag in `crown.json`.
 
 ## 🚀 Quick Start
 

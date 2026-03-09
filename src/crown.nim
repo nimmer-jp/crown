@@ -25,7 +25,7 @@ proc init*() =
     writeFile("src/app/page.nim", initPageContent)
 
   if not fileExists("crown.json"):
-    writeFile("crown.json", "{\n  \"port\": 5000,\n  \"tailwind\": true\n}\n")
+    writeFile("crown.json", "{\n  \"port\": 5000,\n  \"tailwind\": true,\n  \"pwa\": false\n}\n")
 
   if not fileExists("crown.nimble"):
     let nimbleContent =
@@ -52,6 +52,7 @@ proc build*(appDir = "src/app", outDir = ".crown") =
     quit(1)
 
   createDir(outDir)
+  generatePWAFiles()
   let routesCode = generateRoutesCode(appDir)
   let routesPath = outDir / "routes.nim"
   writeFile(routesPath, routesCode)
