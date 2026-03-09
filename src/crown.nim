@@ -62,9 +62,7 @@ proc build*(appDir = "src/app", outDir = ".crown") =
   writeFile(mainPath, mainCode)
 
   let port = getPort()
-  # basolato requires .env, make sure it matches crown.json
-  writeFile(".env", "PORT=" & port & "\nENV=production\n")
-
+  # Basolato resolves PORT during compilation, so pass it via the compiler environment.
   let cmd = "env PORT=" & port & " nim c -d:release " & mainPath
   let ret = execCmd(cmd)
   if ret == 0:
