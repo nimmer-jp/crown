@@ -1,17 +1,8 @@
 import cligen
-import std/[os, strutils, osproc, terminal, json]
+import std/[os, strutils, terminal]
 import crown/generator
+import crown/project
 import crown/watcher
-
-proc getPort(): string =
-  result = "5000"
-  if fileExists("crown.json"):
-    try:
-      let j = parseFile("crown.json")
-      if j.hasKey("port"):
-        result = $j["port"].getInt()
-    except:
-      discard
 
 proc init*() =
   ## Initialize a new Crown project in the current directory
@@ -61,10 +52,10 @@ proc build*(appDir = "src/app", outDir = ".crown") =
   let mainPath = outDir / "main.nim"
   writeFile(mainPath, mainCode)
 
-  let port = getPort()
+  let config = loadCrownConfig()
+  let port = config.port
   # Basolato resolves PORT during compilation, so pass it via the compiler environment.
-  let cmd = "env PORT=" & port & " nim c -d:release " & mainPath
-  let ret = execCmd(cmd)
+  let ret = runNimCompile(config, bmBuild, mainPath, [("PORT", port)])
   if ret == 0:
     styledEcho fgGreen, "✅ Build succeeded! You can run the app with ./.crown/main"
   else:

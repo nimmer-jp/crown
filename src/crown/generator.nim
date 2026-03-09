@@ -7,6 +7,11 @@ type
     methods: seq[tuple[name: string, layout: string]]
     importName: string
 
+proc writeFileIfChanged(path, content: string) =
+  if fileExists(path) and readFile(path) == content:
+    return
+  writeFile(path, content)
+
 proc detectMethods*(content: string): seq[tuple[name: string, layout: string]] =
   var methods: seq[tuple[name: string, layout: string]]
   for line in content.splitLines():
@@ -232,7 +237,7 @@ proc generatePWAFiles*(publicDir: string = "public") =
   "theme_color": "#000000",
   "icons": []
 }"""
-      writeFile(manifestPath, manifestContent)
+      writeFileIfChanged(manifestPath, manifestContent)
     
     let swPath = publicDir / "sw.js"
     let swContent = """const CACHE_NAME = 'crown-pwa-cache-v1';
@@ -342,7 +347,6 @@ self.addEventListener('message', (event) => {
   if (event.data && event.data.type === 'FLUSH_QUEUE') flushQueue();
 });
 
-flushQueue();
-"""
-    writeFile(swPath, swContent)
-
+	flushQueue();
+	"""
+    writeFileIfChanged(swPath, swContent)

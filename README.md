@@ -121,6 +121,25 @@ Crown comes with a powerful CLI to manage your project lifecycle.
 - `crown dev` — Boots the development server. It watches your `src/` directory and auto-recompiles routes dynamically.
 - `crown build` — Compiles your application into a highly optimized, production-ready static binary inside the `.crown` directory (`.crown/main`).
 
+## ⚙️ Compiler and Watcher Config
+
+You can extend the Nim compiler flags used by both `crown build` and `crown dev` in `crown.json`.
+
+```json
+{
+  "port": 5000,
+  "tailwind": true,
+  "pwa": false,
+  "nimFlags": ["-d:ssl"],
+  "buildFlags": ["-d:release", "-d:production_db"],
+  "devFlags": ["--hints:off", "-d:dev_db"],
+  "watchDirs": ["config"],
+  "watchFiles": ["app.env"]
+}
+```
+
+`nim.flags`, `nim.buildFlags`, `nim.devFlags`, `watch.dirs`, and `watch.files` are also accepted as nested forms. The dev server now inherits the full parent environment and overrides only `PORT` and `ENV`, so secrets like `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN` continue to be available in the child process.
+
 ## 🤝 Contributing
 
 We welcome contributions to make Crown the ultimate full-stack framework for Nim! Feel free to open issues or submit pull requests.
