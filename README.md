@@ -103,6 +103,27 @@ proc page*(req: Request, layout: Layout = "admin"): string =
   """
 ```
 
+## 🧩 Components are just Strings
+
+In Crown, HTML is primarily written with `html"""` and returned as a `string`.
+Reusable UI pieces are ordinary Nim procedures that also return `string`.
+
+```nim
+proc badge(text: string): string =
+  component"""<span class="badge">{text}</span>"""
+
+proc page*(req: Request): string =
+  html"""
+    <div>
+      {badge("new")}
+    </div>
+  """
+```
+
+*(Note: `component` is provided as an optional alias for `html` to improve code readability.)*
+
+If you are migrating from pure Basolato and prefer using Templi `Component` objects, Crown does natively support returning `Component` and `Future[Component]` from routes as a backwards-compatibility feature. Components from Basolato are re-exported in `crown/core`.
+
 ## 📂 Layout System
 
 Crown provides a centralized layout system in `src/app/layout/`.

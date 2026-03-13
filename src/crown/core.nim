@@ -4,6 +4,7 @@ import std/[httpcore, asyncdispatch, json, os, strutils]
 
 import basolato/controller except html
 import basolato/core/response as basolatoResponse
+import basolato/core/templates
 
 export strformat, httpcore, asyncdispatch, json, os, strutils
 
@@ -28,6 +29,8 @@ export controller.newHttpHeaders
 export controller.getStr
 export controller.getOrDefault
 export basolatoResponse.body
+export templates.Component
+export templates.tmpli
 
 type Layout* = string
 
@@ -128,4 +131,9 @@ proc disableLayout*(res: Response): Response =
 template html*(s: untyped): string =
   ## Combines string interpolation.
   ## Named `html` to trigger HTML syntax highlighting in editors.
+  fmt(s)
+
+template component*(s: untyped): string =
+  ## An optional sugar alias for `html`.
+  ## Use this if you want naming clarity for reusable UI pieces.
   fmt(s)

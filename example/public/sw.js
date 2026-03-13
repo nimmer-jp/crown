@@ -105,4 +105,5 @@ self.addEventListener('message', (event) => {
   if (event.data && event.data.type === 'FLUSH_QUEUE') flushQueue();
 });
 
-flushQueue();
+	flushQueue();
+	
