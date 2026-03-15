@@ -29,7 +29,8 @@ export controller.newHttpHeaders
 export controller.getStr
 export controller.getOrDefault
 export basolatoResponse.body
-export templates.Component
+import tiara
+export tiara.Html
 export templates.tmpli
 
 type Layout* = string
