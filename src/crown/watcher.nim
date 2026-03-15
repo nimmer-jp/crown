@@ -53,7 +53,7 @@ proc buildAndRunServer*(appDir, outDir, mainPath: string): Process =
   generatePWAFiles()
 
   # Regenerate routes
-  let routesCode = generateRoutesCode(appDir)
+  let routesCode = generateRoutesCode(appDir, isDev = true)
   writeFile(outDir / "routes.nim", routesCode)
 
   let mainCode = generateMainCode("routes.nim")

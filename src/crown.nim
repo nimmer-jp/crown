@@ -73,5 +73,26 @@ proc dev*(appDir = "src/app", outDir = ".crown") =
   # We will use our custom watcher.
   startWatcher(appDir, outDir)
 
+proc start*(outDir = ".crown") =
+  ## Start the built Crown application for production
+  styledEcho fgYellow, "👑 Starting Crown production server..."
+  let binPath = outDir / "main"
+  
+  var runPath = binPath
+  if not fileExists(binPath):
+    let binPathAlt = if hostOS == "windows": binPath & ".exe" else: binPath
+    if not fileExists(binPathAlt):
+      styledEcho fgRed, "❌ Could not find compiled binary. Please run `crown build` first."
+      quit(1)
+    runPath = binPathAlt
+    
+  let config = loadCrownConfig()
+  let port = config.port
+  putEnv("PORT", $port)
+  putEnv("ENV", "production")
+
+  let err = execShellCmd(runPath)
+  quit(err)
+
 when isMainModule:
-  dispatchMulti([build], [dev], [init])
+  dispatchMulti([build], [dev], [start], [init])

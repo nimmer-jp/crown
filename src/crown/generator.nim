@@ -55,7 +55,7 @@ proc resolveUrlPath*(appDir, filePath: string): string =
     urlPath = urlPath[0 .. ^2]
   return urlPath
 
-proc generateRoutesCode*(appDir: string): string =
+proc generateRoutesCode*(appDir: string, isDev: bool = false): string =
   var entries: seq[RouteEntry]
   var notFoundEntry: RouteEntry
   var hasNotFound = false
@@ -226,6 +226,19 @@ proc generateRoutesCode*(appDir: string): string =
     code &= &"      res = htmlResponse(htmlContent, res.status)\n"
     code &= &"    return res\n"
     code &= &"  ),\n"
+
+  if isDev:
+    code &= "  Route.get(\"/routes\", proc(c: Context, p: Params): Future[Response] {.async.} =\n"
+    code &= "    var html = \"\"\"<!DOCTYPE html><html><head><meta charset=\"utf-8\"><title>Crown Routes</title><script src=\"https://cdn.tailwindcss.com\"></script></head><body class=\"bg-gray-50 text-gray-800 p-8\"><div class=\"max-w-4xl mx-auto\"><h1 class=\"text-3xl font-bold mb-6\">👑 Crown Registered Routes</h1><div class=\"bg-white shadow rounded-lg overflow-hidden\"><table class=\"min-w-full\"><thead class=\"bg-gray-100\"><tr><th class=\"px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider\">Path</th><th class=\"px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider\">File</th><th class=\"px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider\">Methods</th></tr></thead><tbody class=\"divide-y divide-gray-200\">\"\"\"\n"
+    for e in entries:
+      var mNames = ""
+      for m in e.methods:
+        if mNames.len > 0: mNames &= ", "
+        mNames &= m.name.toUpperAscii()
+      code &= "    html &= \"\"\"<tr class=\"hover:bg-gray-50\"><td class=\"px-6 py-4 whitespace-nowrap font-mono text-sm text-blue-600\"><a href=\"" & e.urlPath & "\">" & e.urlPath & "</a></td><td class=\"px-6 py-4 whitespace-nowrap text-sm text-gray-500\">src/" & e.filePath & ".nim</td><td class=\"px-6 py-4 whitespace-nowrap text-sm text-gray-500 font-mono\">" & mNames & "</td></tr>\"\"\"\n"
+    code &= "    html &= \"\"\"</tbody></table></div></div></body></html>\"\"\"\n"
+    code &= "    return htmlResponse(html)\n"
+    code &= "  ),\n"
 
   code &= "]\n"
 

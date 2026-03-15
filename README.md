@@ -124,6 +124,29 @@ proc page*(req: Request): string =
 
 If you are migrating from pure Basolato and prefer using Templi `Component` objects, Crown does natively support returning `Component` and `Future[Component]` from routes as a backwards-compatibility feature. Components from Basolato are re-exported in `crown/core`.
 
+## 🔄 State Management & Component Updates
+
+Crown explicitly avoids React-like two-way data binding or client-side component state synchronization. Instead, it fully embraces a **Server-Driven Re-rendering** model. 
+
+The core philosophy is simple:
+1. **Single Source of Truth (SSOT)**: Keep state in the parent page, UseCases, DB, or Session.
+2. **Pure Functions**: Components are pure `props -> string` functions.
+3. **Re-render on Change**: When a child needs an update, recalculate and return the new markup.
+
+Here are the 4 practical patterns for handling state in Crown:
+
+### 1. Persistent State (Parent Page Re-render)
+When updating DB, Session, or Form values, update the state on the server and re-render the target components (or the entire parent page). This is the standard, simplest approach.
+
+### 2. Partial Update Endpoints
+If you want to update *only* a specific component from the parent page, do not mutate it directly. Instead, create a dedicated endpoint (e.g., `src/app/sidebar/page.nim` returning `sidebar(vm)`) and fetch its markup partially via HTMX (`hx-get`).
+
+### 3. Sibling Synchronization
+When updating one component affects another (e.g., an editor save updates a sidebar document count), rebuild the shared state on the server and return *both* pieces of HTML. You can swap them simultaneously using HTMX's Out-of-Band (OOB) swaps or simply re-render the parent target containing both.
+
+### 4. Purely Local UI State
+For transient states like modal visibility, active tabs, or drag-and-drop indicators, use lightweight client-side JavaScript (Vanilla JS, Alpine.js, etc.). Do not try to sync these micro-states with the server.
+
 ## 📂 Layout System
 
 Crown provides a centralized layout system in `src/app/layout/`.
