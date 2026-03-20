@@ -124,6 +124,70 @@ proc page*(req: Request): string =
 
 If you are migrating from pure Basolato and prefer using Templi `Component` objects, Crown does natively support returning `Component` and `Future[Component]` from routes as a backwards-compatibility feature. Components from Basolato are re-exported in `crown/core`.
 
+### Scoped CSS Components
+
+You can define components with co-located scoped CSS using the `component name(args):` macro form.
+Inside `css:`, `.self` is replaced with a compile-time generated unique class.
+Inside `html:`, `class="self"` (or `"foo self bar"`) is replaced with the same class.
+
+```nim
+import crown/core
+
+component myButton(label: string):
+  css: """
+    .self {
+      padding: var(--space-4);
+      background: var(--primary);
+    }
+    .self:hover { opacity: 0.8; }
+  """
+
+  html:
+    button(class="self"):
+      text label
+```
+
+`component"""..."""` (string alias) is still available for backwards compatibility.
+
+You can also write raw HTML directly in `html:`:
+
+```nim
+component myButtonRaw(label: string):
+  css: """
+    .self { padding: 8px 12px; }
+  """
+  html: """
+    <button class="btn self">{label}</button>
+  """
+```
+
+Raw HTML mode also supports PHP-like directives:
+
+```nim
+component listPanel(items: seq[string], showHeader: bool):
+  css: ".self { padding: 12px; }"
+  html: """
+    <section class="self">
+      {? if showHeader ?}
+        <h2>Items</h2>
+      {? end ?}
+      <ul>
+      {? for item in items ?}
+        <li>{?= item ?}</li>
+      {? endfor ?}
+      </ul>
+    </section>
+  """
+```
+
+Supported directives:
+- `{? if ... ?}`, `{? elif ... ?}`, `{? else ?}`, `{? end ?}` (`endif` also allowed)
+- `{? for ... ?}`, `{? while ... ?}`, `{? case ... ?}`, `{? of ... ?}`, `{? endfor ?}`
+- `{?= expr ?}` (inline expression output)
+
+Inside `html:`, control flow (`if` / `for` / `case`) and nested function/component calls are supported.
+Void elements like `input` and `br` are emitted without closing tags.
+
 ## 🔄 State Management & Component Updates
 
 Crown explicitly avoids React-like two-way data binding or client-side component state synchronization. Instead, it fully embraces a **Server-Driven Re-rendering** model. 
