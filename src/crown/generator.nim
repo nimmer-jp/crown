@@ -7,6 +7,13 @@ type
     methods: seq[tuple[name: string, layout: string]]
     importName: string
 
+proc normalizeModulePath*(path: string): string =
+  ## Convert filesystem separators to Nim module separators.
+  path.replace("\\", "/").replace(".nim", "")
+
+proc makeImportAlias*(modulePath: string): string =
+  modulePath.replace("\\", "_").replace("/", "_").replace("-", "_")
+
 proc writeFileIfChanged(path, content: string) =
   if fileExists(path) and readFile(path) == content:
     return
@@ -65,12 +72,11 @@ proc generateRoutesCode*(appDir: string, isDev: bool = false): string =
       let content = readFile(path)
       let methods = detectMethods(content)
       if methods.len > 0:
-        let relPath = path.relativePath("src/")
-        let importName = relPath.replace("/", "_").replace(".nim", "").replace(
-            "-", "_")
+        let relPath = normalizeModulePath(path.relativePath("src"))
+        let importName = makeImportAlias(relPath)
 
         let entry = RouteEntry(
-          filePath: relPath.replace(".nim", ""),
+          filePath: relPath,
           urlPath: resolveUrlPath(appDir, path),
           methods: methods,
           importName: importName
@@ -91,10 +97,10 @@ proc generateRoutesCode*(appDir: string, isDev: bool = false): string =
   if dirExists(layoutDir):
     for path in walkDirRec(layoutDir):
       if path.endsWith(".nim"):
-        let relPath = path.relativePath("src/")
+        let relPath = normalizeModulePath(path.relativePath("src"))
         let layoutImportName = "crown_layout_" & path.extractFilename().replace(
             ".nim", "")
-        let stmt = &"import ../src/{relPath.replace(\".nim\", \"\")} as {layoutImportName}\n"
+        let stmt = &"import ../src/{relPath} as {layoutImportName}\n"
         if not layoutImports.contains(stmt):
           code &= stmt
           layoutImports.incl(stmt)

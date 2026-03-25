@@ -1,4 +1,5 @@
 import std/unittest
+import std/sequtils
 import crown/generator
 
 suite "Generator tests":
@@ -13,9 +14,10 @@ suite "Generator tests":
       return htmlResponse fmt"saved"
     """
     let methods = detectMethods(sampleContent)
-    check "page" in methods
-    check "post" in methods
-    check "get" notin methods
+    let methodNames = methods.mapIt(it.name)
+    check "page" in methodNames
+    check "post" in methodNames
+    check "get" notin methodNames
 
   test "resolveUrlPath properly resolves nested directory structures":
     # Mocks app structure
@@ -24,3 +26,10 @@ suite "Generator tests":
     check resolveUrlPath(root, "/example/src/app/page.nim") == "/"
     check resolveUrlPath(root, "/example/src/app/editor/page.nim") == "/editor"
     check resolveUrlPath(root, "/example/src/app/api/save.nim") == "/api/save"
+
+  test "normalizes windows module paths for imports and aliases":
+    check normalizeModulePath(r"app\page.nim") == "app/page"
+    check normalizeModulePath(r"app\admin\index.nim") == "app/admin/index"
+    check makeImportAlias(r"app\page") == "app_page"
+    check makeImportAlias("app/page") == "app_page"
+    check makeImportAlias("app/admin-user/page") == "app_admin_user_page"
