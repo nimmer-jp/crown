@@ -18,6 +18,21 @@ proc addUnique(dest: var seq[string], values: openArray[string]) =
     if normalized.len > 0 and normalized notin dest:
       dest.add(normalized)
 
+proc hasServerBackendFlag(flags: openArray[string]): bool =
+  for value in flags:
+    let normalized = value.strip()
+    if normalized in [
+      "-d:httpbeast",
+      "--define:httpbeast",
+      "-u:httpbeast",
+      "--undef:httpbeast",
+      "-d:httpx",
+      "--define:httpx",
+      "-u:httpx",
+      "--undef:httpx"
+    ]:
+      return true
+
 proc readStringSeq(node: JsonNode, key: string): seq[string] =
   if node.kind != JObject or not node.hasKey(key):
     return @[]
@@ -80,6 +95,13 @@ proc loadCrownConfig*(): CrownConfig =
 
 proc getCompileArgs*(config: CrownConfig, mode: BuildMode, mainPath: string): seq[string] =
   result = @["c"]
+  let modeFlags = case mode
+    of bmBuild:
+      config.buildFlags
+    of bmDev:
+      config.devFlags
+  if not hasServerBackendFlag(config.nimFlags) and not hasServerBackendFlag(modeFlags):
+    addUnique(result, @["-d:httpbeast"])
   addUnique(result, config.nimFlags)
   case mode
   of bmBuild:

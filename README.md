@@ -248,6 +248,9 @@ You can extend the Nim compiler flags used by both `crown build` and `crown dev`
 
 `nim.flags`, `nim.buildFlags`, `nim.devFlags`, `watch.dirs`, and `watch.files` are also accepted as nested forms. The dev server now inherits the full parent environment and overrides only `PORT` and `ENV`, so secrets like `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN` continue to be available in the child process.
 
+By default, Crown now compiles with `-d:httpbeast` (Basolato's `httpbeast` backend).  
+If you want to switch backend explicitly, set a backend define/undef flag in `nimFlags`, `buildFlags`, or `devFlags` (for example `"-u:httpbeast", "-d:httpx"`).
+
 ## 🤝 Contributing
 
 We welcome contributions to make Crown the ultimate full-stack framework for Nim! Feel free to open issues or submit pull requests.
