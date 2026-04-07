@@ -1,5 +1,6 @@
 import cligen
 import std/[os, strutils, terminal]
+import crown/frontend
 import crown/generator
 import crown/project
 import crown/watcher
@@ -53,6 +54,18 @@ proc build*(appDir = "src/app", outDir = ".crown") =
   writeFile(mainPath, mainCode)
 
   let config = loadCrownConfig()
+  let twRes = runTailwindIfConfigured(config, bmBuild)
+  if not twRes.ok:
+    styledEcho fgRed, "❌ Tailwind build failed:"
+    echo twRes.message
+    quit(1)
+
+  let frontendRes = buildFrontendAssets(config, appDir, outDir, bmBuild)
+  if not frontendRes.success:
+    styledEcho fgRed, "❌ Frontend build failed:"
+    echo frontendRes.message
+    quit(1)
+
   let port = config.port
   # Basolato resolves PORT during compilation, so pass it via the compiler environment.
   let ret = runNimCompile(config, bmBuild, mainPath, [("PORT", port)])
@@ -94,5 +107,34 @@ proc start*(outDir = ".crown") =
   let err = execShellCmd(runPath)
   quit(err)
 
+proc test*() =
+  ## Run the project test suite (`nimble test` when `crown.nimble` exists).
+  if not fileExists("crown.nimble"):
+    styledEcho fgRed, "❌ crown.nimble not found. Run `crown init` or use `nimble test` from the package root."
+    quit(1)
+  let code = execShellCmd("nimble test -y")
+  quit(code)
+
+proc check*(appDir = "src/app", outDir = ".crown") =
+  ## Regenerate routes and run `nim check` on `.crown/main.nim` (fast semantic check).
+  if not dirExists(appDir):
+    echo "[Error] App directory not found: ", appDir
+    quit(1)
+  createDir(outDir)
+  let routesCode = generateRoutesCode(appDir)
+  writeFile(outDir / "routes.nim", routesCode)
+  let mainCode = generateMainCode("routes.nim")
+  let mainPath = outDir / "main.nim"
+  writeFile(mainPath, mainCode)
+  let config = loadCrownConfig()
+  let port = config.port
+  styledEcho fgYellow, "👑 Running nim check on ", mainPath, "..."
+  let ret = runNimCheck(config, mainPath, [("PORT", port)])
+  if ret == 0:
+    styledEcho fgGreen, "✅ Check succeeded."
+  else:
+    styledEcho fgRed, "❌ Check reported errors."
+  quit(ret)
+
 when isMainModule:
-  dispatchMulti([build], [dev], [start], [init])
+  dispatchMulti([build], [dev], [start], [init], [test], [check])

@@ -16,10 +16,10 @@ Crown is a next-generation meta-framework for the [Nim](https://nim-lang.org/) p
 ## ✨ Features and Philosophy
 
 - **Next.js-like Developer Experience (DX)**: Ditch manual route definitions. Crown uses a File-System Routing architecture where your `src/app/` directory perfectly mirrors your app's URLs.
-- **Zero JS (State Management Free)**: Crown treats HTML as the engine of application state. By leveraging HTMX automatically under the hood, you get SPA-like partial page updates and rich UX without writing a single line of client-side JavaScript.
+- **Zero JS (State Management Free)**: Crown treats HTML as the engine of application state. A small **built-in client** (compiled from `crown`'s `client.nim`) handles `crown-get` / `crown-post` style partial updates—**HTMX-compatible patterns** (`hx-*`) also work if you load HTMX yourself. You get SPA-like partial page updates without writing your own fetch/boilerplate.
 - **Solid Bedrock**: We didn't reinvent the wheel. Crown is built upon **[Basolato](https://github.com/itsumura-h/nim-basolato)**, leveraging its battle-tested HTTP server, security, and session management capabilities—completely abstracted away for your convenience.
 - **Component Co-location**: No templating black magic. Write your views and your backend logic cleanly together in the same `.nim` file using native procs and the `html""" """` macro.
-- **Tailwind CSS Ready**: Crown automatically injects Tailwind CSS by default, enabling you to style your application instantly without complex build pipelines.
+- **Tailwind CSS Ready**: Injects the Tailwind **CDN** by default, or optionally runs the **Tailwind CLI** at build/dev time and serves a generated stylesheet (see `crown.json` below).
 - **Zero-Config PWA**: Automatically generates a Service Worker, manifest, and offline fallback (including Background Sync for API requests) with a single flip of a flag in `crown.json`.
 
 ## 🚀 Quick Start
@@ -63,9 +63,18 @@ my_awesome_app/
 
 > **Warning**: Never manually create `src/main.nim` or `src/routes.nim`. Crown generates highly-optimized routing logic automatically in the hidden `.crown/` directory for you.
 
+### Dynamic segments, route groups, and metadata
+
+- **Dynamic params (Basolato)**: `p_id.nim` or `.../p_id/page.nim` → URL segment `{id:str}`. Use **`p_<name>_int`** (e.g. `p_post_id_int/page.nim`) → `{post_id:int}` for numeric segments.
+- **Catch-all (Crown, no Basolato fork)**: **`p___<name>`** (e.g. `wiki/p___page/page.nim`) → greedy path under the parent segment. Crown registers multiple Basolato routes (`/{g0:str}`, `/{g0:str}/{g1:str}`, … up to **`catchAllMaxDepth`** in `crown.json`, default 16) and merges `g0`… into one param **`name`** on `Request` (`req.getStr("page")` in the example). Deeper URLs are not matched by this route (use a 404 or another handler).
+- **Route groups (URL omitted)**: Any path folder whose name starts with **`__`** is skipped in the URL (similar idea to Next.js `(group)` folders, without parentheses so Nim imports stay valid). Example: `src/app/__marketing/about/page.nim` → GET `/about`.
+- **SEO helpers**: `crownMetaTags` / `CrownMetadata` build `<title>`, description, Open Graph, etc. Place the returned string inside your layout `<head>`. Use `withCacheMaxAge` / `withCacheControl` on `Response` when you want explicit HTTP caching.
+- **Sitemap / robots**: Add `src/app/sitemap.nim` with `proc sitemap*(req: Request): string` → served at **`/sitemap.xml`** (string bodies use `xmlResponse` semantics). Add `src/app/robots.nim` with `proc robots*(req: Request): string` → **`/robots.txt`**. You can return `Response` yourself with `xmlResponse` / `plainTextResponse` for full control.
+- **Images**: `crownImage` and `crownImageSrcset` emit escaped `<img>` / `srcset` markup (no server-side resizing; use a CDN or static variants as needed).
+
 ## 💻 1-File Components (Showcase)
 
-Crown allows you to elegantly handle multiple HTTP methods inside of a single page module. Return partial HTML snippets to handle `hx-post` requests magically.
+Crown allows you to elegantly handle multiple HTTP methods inside of a single page module. Return partial HTML snippets for **`post`** handlers or HTMX `hx-post` against the same path.
 
 ```nim
 # src/app/editor/page.nim
@@ -219,8 +228,6 @@ Crown provides a centralized layout system in `src/app/layout/`.
 - **Custom Layouts**: You can specify a layout by adding a second parameter to your `page` function: `proc page*(req: Request, layout: Layout = "admin")`. This will look for `src/app/layout/admin.nim`.
 - **Disable Layout**: If you want to return a raw snippet without any layout (e.g., for HTMX parts), use `res.disableLayout()` or handle it via `post` routes which don't apply layouts by default.
 
-```
-
 ## 🛠 Command Line Interface
 
 Crown comes with a powerful CLI to manage your project lifecycle.
@@ -228,6 +235,8 @@ Crown comes with a powerful CLI to manage your project lifecycle.
 - `crown init` — Scaffolds a new barebones project structure natively.
 - `crown dev` — Boots the development server. It watches your `src/` directory and auto-recompiles routes dynamically.
 - `crown build` — Compiles your application into a highly optimized, production-ready static binary inside the `.crown` directory (`.crown/main`).
+- `crown test` — Runs `nimble test -y` in the current project (requires `crown.nimble`).
+- `crown check` — Regenerates `.crown/routes.nim` / `main.nim` and runs `nim check` on the entrypoint (fast type/syntax check without a full link).
 
 ## ⚙️ Compiler and Watcher Config
 
@@ -238,18 +247,76 @@ You can extend the Nim compiler flags used by both `crown build` and `crown dev`
   "port": 5000,
   "tailwind": true,
   "pwa": false,
+  "devIncremental": true,
   "nimFlags": ["-d:ssl"],
   "buildFlags": ["-d:release", "-d:production_db"],
   "devFlags": ["--hints:off", "-d:dev_db"],
   "watchDirs": ["config"],
-  "watchFiles": ["app.env"]
+  "watchFiles": ["app.env"],
+  "catchAllMaxDepth": 16
 }
 ```
 
+`catchAllMaxDepth` (1–64) limits how many path segments a **`p___…`** catch-all expands to (see routing above).
+
 `nim.flags`, `nim.buildFlags`, `nim.devFlags`, `watch.dirs`, and `watch.files` are also accepted as nested forms. The dev server now inherits the full parent environment and overrides only `PORT` and `ENV`, so secrets like `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN` continue to be available in the child process.
+
+- **`devIncremental`**: When `true` (default), `crown dev` passes Nim `--incremental:on` unless you already set `--incremental:on|off` in `nimFlags` / `devFlags`. Disable if you hit compiler issues with incremental mode.
 
 By default, Crown now compiles with `-d:httpbeast` (Basolato's `httpbeast` backend).  
 If you want to switch backend explicitly, set a backend define/undef flag in `nimFlags`, `buildFlags`, or `devFlags` (for example `"-u:httpbeast", "-d:httpx"`).
+
+### Tailwind: CDN vs CLI (`crown.json`)
+
+The top-level `"tailwind": true|false` still works. For production-sized CSS, you can use the **standalone Tailwind CLI** on `PATH` as `tailwindcss`:
+
+```json
+{
+  "tailwind": {
+    "cdn": false,
+    "cli": {
+      "enabled": true,
+      "input": "src/input.css",
+      "output": "public/app.css"
+    }
+  }
+}
+```
+
+When `cli.enabled` is true, `crown dev` / `crown build` run Tailwind before bundling JS. The layout injector then links `/app.css` (derived from `output` under `public/`) instead of the CDN script. You can override the URL with `"css": "/assets/app.css"` inside the `tailwind` object.
+
+## 🧪 Frontend Dev Baseline
+
+Crown now includes a minimal Next.js-like frontend baseline in `crown dev`:
+
+- `crown dev` handles backend + frontend in one process loop.
+- Frontend build failures do **not** stop the dev watcher/server.
+- Dev-only browser overlay shows frontend compile/runtime errors.
+- Route-level client entries are supported while keeping single `app.js` flow.
+
+### Client Entry Convention
+
+- Global entry (backward compatible): `src/app.js` -> built to `public/app.js`
+- Route-level entry: `src/app/**/client.js` (next to each `page.nim`)
+  - Example: `src/app/editor/client.js` is loaded only on `/editor`
+  - Example: `src/app/blog/client.js` is loaded on `/blog/{id:str}`
+
+### Optional `frontend` Config (`crown.json`)
+
+```json
+{
+  "frontend": {
+    "enabled": true,
+    "entry": "src/app.js",
+    "routeEntry": "client.js",
+    "builder": "auto",
+    "overlay": true
+  }
+}
+```
+
+- `builder: "auto"` uses Bun when available, otherwise falls back to file copy mode.
+- Top-level aliases are also accepted: `frontendEnabled`, `frontendEntry`, `frontendRouteEntry`, `frontendBuilder`, `frontendOverlay`.
 
 ## 🤝 Contributing
 
@@ -258,4 +325,3 @@ We welcome contributions to make Crown the ultimate full-stack framework for Nim
 ## 📄 License
 
 This project is licensed under the MIT License.
-```

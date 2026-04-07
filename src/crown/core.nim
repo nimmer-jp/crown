@@ -21,6 +21,22 @@ proc get*(r: Request, key: string): string = r.params.getStr(key)
 proc getStr*(r: Request, key: string): string = r.params.getStr(key)
 proc getOrDefault*(r: Params, key: string, default: string): string = r.getStr(
     key, default)
+
+proc crownJoinGreedy*(p: Params, slotCount: int, slotPrefix = "g"): string =
+  ## Joins Basolato path slots ``g0``..``g{n-1}`` into one path (Crown catch-all expansion).
+  var parts: seq[string] = @[]
+  for i in 0 ..< slotCount:
+    parts.add(p.getStr(slotPrefix & $i))
+  parts.join("/")
+
+proc crownParamsWithCatch*(p: Params, catchName, catchValue: string): Params =
+  ## Copies ``p`` and sets ``catchName`` to the merged greedy path (for handlers using ``req.getStr("slug")``).
+  result = Params.new()
+  if not p.isNil:
+    for k, v in p.pairs:
+      result[k] = v
+  result[catchName] = Param.new(catchValue)
+
 # Expose `postParams` and `queryParams` behavior since they're just params in Basolato
 proc postParams*(r: Request): Params = r.params
 proc queryParams*(r: Request): Params = r.params
@@ -35,6 +51,79 @@ export tiara.Html
 export templates.tmpli
 
 type Layout* = string
+
+type CrownMetadata* = object
+  title*: string
+  description*: string
+  canonical*: string
+  robots*: string
+  ogTitle*: string
+  ogDescription*: string
+  ogImage*: string
+  twitterCard*: string
+
+proc crownEscapeAttr*(s: string): string =
+  result = newStringOfCap(s.len + 8)
+  for ch in s:
+    case ch
+    of '&':
+      result.add("&amp;")
+    of '<':
+      result.add("&lt;")
+    of '"':
+      result.add("&quot;")
+    else:
+      result.add(ch)
+
+proc crownMetaTags*(m: CrownMetadata): string =
+  ## Emits common `<head>` tags from structured metadata (Next.js `metadata`-like DX).
+  var lines: seq[string] = @[]
+  if m.title.len > 0:
+    lines.add("<title>" & crownEscapeAttr(m.title) & "</title>")
+  if m.description.len > 0:
+    lines.add("<meta name=\"description\" content=\"" & crownEscapeAttr(
+        m.description) & "\">")
+  if m.robots.len > 0:
+    lines.add("<meta name=\"robots\" content=\"" & crownEscapeAttr(m.robots) & "\">")
+  if m.canonical.len > 0:
+    lines.add("<link rel=\"canonical\" href=\"" & crownEscapeAttr(m.canonical) & "\">")
+  let ogT = if m.ogTitle.len > 0: m.ogTitle else: m.title
+  let ogD = if m.ogDescription.len > 0: m.ogDescription else: m.description
+  if ogT.len > 0:
+    lines.add("<meta property=\"og:title\" content=\"" & crownEscapeAttr(ogT) & "\">")
+  if ogD.len > 0:
+    lines.add("<meta property=\"og:description\" content=\"" & crownEscapeAttr(
+        ogD) & "\">")
+  if m.ogImage.len > 0:
+    lines.add("<meta property=\"og:image\" content=\"" & crownEscapeAttr(
+        m.ogImage) & "\">")
+  if m.twitterCard.len > 0:
+    lines.add("<meta name=\"twitter:card\" content=\"" & crownEscapeAttr(
+        m.twitterCard) & "\">")
+  lines.join("\n")
+
+proc crownImage*(src, alt: string, className = "", loading = "lazy",
+    width = 0, height = 0): string =
+  ## Responsive-friendly `<img>` with escaped attributes (Next `Image`-lite; no automatic optimization).
+  var attrs = "src=\"" & crownEscapeAttr(src) & "\" alt=\"" & crownEscapeAttr(alt) & "\""
+  if className.len > 0:
+    attrs.add(" class=\"" & crownEscapeAttr(className) & "\"")
+  if loading.len > 0:
+    attrs.add(" loading=\"" & crownEscapeAttr(loading) & "\"")
+  if width > 0:
+    attrs.add(" width=\"" & $width & "\"")
+  if height > 0:
+    attrs.add(" height=\"" & $height & "\"")
+  "<img " & attrs & " />"
+
+proc crownImageSrcset*(baseSrc: string, widths: openArray[int]): string =
+  ## Builds a `srcset` string like `"/img/a.jpg 320w, /img/a.jpg 640w"` (same file at multiple widths; swap for real variants if you have them). URLs are not HTML-escaped; avoid raw `"` in paths.
+  if widths.len == 0:
+    return ""
+  var parts: seq[string] = @[]
+  for w in widths:
+    parts.add(baseSrc & " " & $w & "w")
+  parts.join(", ")
 
 const clientJsPath = currentSourcePath().parentDir() / "client.js"
 const clientNimPath = currentSourcePath().parentDir() / "client.nim"
@@ -54,24 +143,252 @@ const crownClientJs = """
 <script>
 """ & clientJsCode & "\n</script>\n"
 
+const crownDevOverlayJs = """
+<script>
+(function () {
+  if (window.__crownDevOverlayInstalled) return;
+  window.__crownDevOverlayInstalled = true;
+
+  var compileMessage = "";
+  var runtimeMessage = "";
+
+  function escapeHtml(value) {
+    return String(value || "").replace(/[&<>"]/g, function (ch) {
+      return ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;" })[ch];
+    });
+  }
+
+  function ensureOverlay() {
+    var existing = document.getElementById("__crown-dev-overlay");
+    if (existing) return existing;
+    var box = document.createElement("div");
+    box.id = "__crown-dev-overlay";
+    box.style.position = "fixed";
+    box.style.inset = "0";
+    box.style.zIndex = "2147483647";
+    box.style.background = "rgba(12, 12, 16, 0.92)";
+    box.style.color = "#f8fafc";
+    box.style.padding = "24px";
+    box.style.fontFamily = "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace";
+    box.style.fontSize = "13px";
+    box.style.lineHeight = "1.5";
+    box.style.whiteSpace = "pre-wrap";
+    box.style.overflow = "auto";
+    box.style.display = "none";
+    document.body.appendChild(box);
+    return box;
+  }
+
+  function render() {
+    var overlay = ensureOverlay();
+    var activeMessage = compileMessage || runtimeMessage;
+    if (!activeMessage) {
+      overlay.style.display = "none";
+      return;
+    }
+    var title = compileMessage ? "Crown Frontend Compile Error" : "Crown Runtime Error";
+    overlay.innerHTML = "<div style='font-weight:700;font-size:16px;margin-bottom:12px'>" +
+      escapeHtml(title) +
+      "</div><div>" + escapeHtml(activeMessage) + "</div>";
+    overlay.style.display = "block";
+  }
+
+  function setCompile(message) {
+    compileMessage = String(message || "").trim();
+    render();
+  }
+
+  function setRuntime(message) {
+    if (!message) return;
+    runtimeMessage = String(message);
+    render();
+  }
+
+  window.addEventListener("error", function (event) {
+    if (event && event.message) {
+      var location = event.filename ? "\\n" + event.filename + ":" + (event.lineno || 0) + ":" + (event.colno || 0) : "";
+      setRuntime(event.message + location);
+      return;
+    }
+    if (event && event.target && event.target.src) {
+      setRuntime("Failed to load script: " + event.target.src);
+    }
+  }, true);
+
+  window.addEventListener("unhandledrejection", function (event) {
+    var reason = event && event.reason ? event.reason : "Unhandled promise rejection";
+    setRuntime(reason && reason.stack ? reason.stack : String(reason));
+  });
+
+  async function pollCompileError() {
+    try {
+      var res = await fetch("/__crown/dev/frontend-error", { cache: "no-store" });
+      if (res.ok) {
+        var payload = await res.json();
+        var msg = payload && typeof payload.error === "string" ? payload.error : "";
+        setCompile(msg);
+      }
+    } catch (_) {
+      // Keep polling even if the endpoint is temporarily unavailable.
+    }
+    setTimeout(pollCompileError, 1000);
+  }
+
+  pollCompileError();
+})();
+</script>
+"""
+
+proc readCrownJsonStr(node: JsonNode, key: string): string =
+  if node.kind != JObject or not node.hasKey(key):
+    return ""
+  if node[key].kind == JString:
+    return node[key].getStr()
+  ""
+
+proc crownHrefFromPublicCssOutput*(outputPath: string): string =
+  ## Maps `public/app.css` → `/app.css` for `<link href>`.
+  var norm = outputPath.replace('\\', '/')
+  if norm.startsWith("./"):
+    norm = norm[2 .. ^1]
+  let pub = "public/"
+  if norm.startsWith(pub):
+    return "/" & norm[pub.len .. ^1]
+  let marker = "/public/"
+  let idx = norm.find(marker)
+  if idx >= 0:
+    return "/" & norm[idx + marker.len .. ^1]
+  "/" & norm.extractFilename()
+
+proc resolveTailwindForInject(root: JsonNode): tuple[active: bool, useCdn: bool,
+    cssHref: string] =
+  result = (true, true, "")
+  if root.kind != JObject or not root.hasKey("tailwind"):
+    return
+  case root["tailwind"].kind
+  of JBool:
+    result.active = root["tailwind"].getBool()
+    result.useCdn = result.active
+  of JObject:
+    let t = root["tailwind"]
+    if t.hasKey("enabled") and t["enabled"].kind == JBool and not t["enabled"].getBool():
+      result.active = false
+      result.useCdn = false
+      return
+    if t.hasKey("cdn") and t["cdn"].kind == JBool:
+      result.useCdn = t["cdn"].getBool()
+    let css = readCrownJsonStr(t, "css").strip()
+    if css.len > 0:
+      result.cssHref = css
+      result.useCdn = false
+    if result.cssHref.len == 0 and t.hasKey("cli") and t["cli"].kind == JObject:
+      let c = t["cli"]
+      if c.hasKey("enabled") and c["enabled"].kind == JBool and c["enabled"].getBool():
+        let outp = readCrownJsonStr(c, "output").strip()
+        if outp.len > 0:
+          result.cssHref = crownHrefFromPublicCssOutput(outp)
+          result.useCdn = false
+  else:
+    discard
+
 proc getCrownConfig(): JsonNode =
-  result = %*{"tailwind": true, "pwa": false}
+  var pwa = false
+  var twActive = true
+  var twCdn = true
+  var twCss = ""
   if fileExists("crown.json"):
     try:
-      let j = parseFile("crown.json")
-      if j.hasKey("tailwind"):
-        result["tailwind"] = j["tailwind"]
-      if j.hasKey("pwa"):
-        result["pwa"] = j["pwa"]
+      let root = parseFile("crown.json")
+      if root.kind == JObject:
+        if root.hasKey("pwa") and root["pwa"].kind == JBool:
+          pwa = root["pwa"].getBool()
+        let tw = resolveTailwindForInject(root)
+        twActive = tw.active
+        twCdn = tw.useCdn
+        twCss = tw.cssHref
     except:
       discard
+  result = %*{
+    "pwa": pwa,
+    "tailwindActive": twActive,
+    "tailwindCdn": twCdn,
+    "tailwindCss": twCss
+  }
 
-proc injectCrownSystem*(content: string): string =
+proc loadFrontendManifest(): JsonNode =
+  let manifestPath = ".crown/frontend-manifest.json"
+  if not fileExists(manifestPath):
+    return %*{}
+  try:
+    return parseFile(manifestPath)
+  except:
+    return %*{}
+
+proc readManifestString(manifest: JsonNode, key: string): string =
+  if manifest.kind != JObject or not manifest.hasKey(key):
+    return ""
+  if manifest[key].kind == JString:
+    return manifest[key].getStr()
+  ""
+
+proc readManifestBool(manifest: JsonNode, key: string, defaultValue: bool): bool =
+  if manifest.kind != JObject or not manifest.hasKey(key):
+    return defaultValue
+  if manifest[key].kind == JBool:
+    return manifest[key].getBool()
+  defaultValue
+
+proc readManifestRouteScript(manifest: JsonNode, routePath: string): string =
+  if routePath.len == 0:
+    return ""
+  if manifest.kind != JObject or not manifest.hasKey("routeScripts"):
+    return ""
+  let routes = manifest["routeScripts"]
+  if routes.kind != JObject or not routes.hasKey(routePath):
+    return ""
+  if routes[routePath].kind == JString:
+    return routes[routePath].getStr()
+  ""
+
+proc hasScriptReference(contentLower, srcPath: string): bool =
+  if srcPath.len == 0:
+    return false
+  let needleDouble = "src=\"" & srcPath.toLowerAscii() & "\""
+  let needleSingle = "src='" & srcPath.toLowerAscii() & "'"
+  contentLower.contains(needleDouble) or contentLower.contains(needleSingle)
+
+proc hasStylesheetReference(contentLower, hrefPath: string): bool =
+  if hrefPath.len == 0:
+    return false
+  let h = hrefPath.toLowerAscii()
+  contentLower.contains("href=\"" & h & "\"") or contentLower.contains("href='" & h & "'")
+
+proc injectCrownSystem*(content: string, routePath = ""): string =
   ## Injects Crown system scripts and Tailwind CSS into the HTML content.
+  let lowerContent = content.toLowerAscii()
   var injectStr = crownClientJs
   let config = getCrownConfig()
-  if config["tailwind"].getBool(true):
-    injectStr &= "<script src=\"https://cdn.tailwindcss.com\"></script>\n"
+  let frontendManifest = loadFrontendManifest()
+
+  let globalScript = readManifestString(frontendManifest, "globalScript")
+  if globalScript.len > 0 and not hasScriptReference(lowerContent, globalScript):
+    injectStr &= "<script type=\"module\" src=\"" & globalScript & "\"></script>\n"
+
+  let routeScript = readManifestRouteScript(frontendManifest, routePath)
+  if routeScript.len > 0 and routeScript != globalScript and
+      not hasScriptReference(lowerContent, routeScript):
+    injectStr &= "<script type=\"module\" src=\"" & routeScript & "\"></script>\n"
+
+  let devOverlayEnabled = readManifestBool(frontendManifest, "overlay", true)
+  if getEnv("ENV", "").toLowerAscii() == "development" and devOverlayEnabled:
+    injectStr &= crownDevOverlayJs
+
+  if config["tailwindActive"].getBool(true):
+    let twCss = config["tailwindCss"].getStr("").strip()
+    if twCss.len > 0 and not hasStylesheetReference(lowerContent, twCss):
+      injectStr &= "<link rel=\"stylesheet\" href=\"" & twCss & "\">\n"
+    elif config["tailwindCdn"].getBool(true):
+      injectStr &= "<script src=\"https://cdn.tailwindcss.com\"></script>\n"
 
   if config["pwa"].getBool(false):
     injectStr &= "<link rel=\"manifest\" href=\"/manifest.json\">\n"
@@ -97,7 +414,6 @@ proc injectCrownSystem*(content: string): string =
     injectStr &= "  }\n"
     injectStr &= "</script>\n"
 
-  let lowerContent = content.toLowerAscii()
   let headIdx = lowerContent.find("</head>")
 
   if headIdx != -1:
@@ -119,6 +435,16 @@ proc jsonResponse*(data: JsonNode, status = Http200): Response =
   headers["Content-Type"] = "application/json; charset=utf-8"
   return Response.new(status, $data, headers)
 
+proc xmlResponse*(content: string, status = Http200): Response =
+  var headers = newHttpHeaders()
+  headers["Content-Type"] = "application/xml; charset=utf-8"
+  Response.new(status, content, headers)
+
+proc plainTextResponse*(content: string, status = Http200): Response =
+  var headers = newHttpHeaders()
+  headers["Content-Type"] = "text/plain; charset=utf-8"
+  Response.new(status, content, headers)
+
 proc disableLayout*(res: var Response): var Response =
   ## Explicitly disables the layout injection for this response.
   res.headers["Crown-Disable-Layout"] = "true"
@@ -129,6 +455,19 @@ proc disableLayout*(res: Response): Response =
   var clonedHeaders = res.headers
   clonedHeaders["Crown-Disable-Layout"] = "true"
   return Response.new(res.status, res.body(), clonedHeaders)
+
+proc withHeader*(res: Response, key, val: string): Response =
+  var clonedHeaders = res.headers
+  clonedHeaders[key] = val
+  Response.new(res.status, res.body(), clonedHeaders)
+
+proc withCacheControl*(res: Response, directive: string): Response =
+  ## Sets `Cache-Control` (e.g. `"public, max-age=60"` or `"no-store"`).
+  withHeader(res, "Cache-Control", directive)
+
+proc withCacheMaxAge*(res: Response, seconds: Natural, isPublic = true): Response =
+  let vis = if isPublic: "public" else: "private"
+  withCacheControl(res, vis & ", max-age=" & $seconds)
 
 proc crownToString*[T](value: T): string {.inline.} =
   $value

@@ -15,3 +15,6 @@ requires "nim >= 2.0.0"
 requires "https://github.com/itsumura-h/nim-basolato"
 requires "cligen"
 requires "https://github.com/nimmer-jp/tiara"
+
+task test, "Run unit tests":
+  exec "nim c -r --path:src tests/tgenerator.nim"
