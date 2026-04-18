@@ -12,7 +12,7 @@ proc init*() =
   createDir("src/app")
   createDir("public")
 
-  let initPageContent = "import crown/core\n\nproc page*(context: Context, params: Params): Future[Response] {.async.} =\n  return htmlResponse(html\"\"\"\n    <div class=\"p-10 text-center\">\n      <h1 class=\"text-4xl font-bold text-gray-800\">Welcome to Crown 👑</h1>\n      <p class=\"mt-4 text-gray-600\">Your App Router-like framework for Nim.</p>\n      <p class=\"mt-2 text-sm text-gray-400\">Edit <code>src/app/page.nim</code> to get started.</p>\n    </div>\n  \"\"\")\n"
+  let initPageContent = "import crown/core\n\nproc page*(req: Request): string =\n  html\"\"\"\n    <div class=\"p-10 text-center\">\n      <h1 class=\"text-4xl font-bold text-gray-800\">Welcome to Crown 👑</h1>\n      <p class=\"mt-4 text-gray-600\">Your App Router-like framework for Nim.</p>\n      <p class=\"mt-2 text-sm text-gray-400\">Edit <code>src/app/page.nim</code> to get started.</p>\n    </div>\n  \"\"\"\n"
   if not fileExists("src/app/page.nim"):
     writeFile("src/app/page.nim", initPageContent)
 

@@ -1,7 +1,40 @@
-import std/[os, times, osproc, tables, terminal, strutils]
+import std/[net, os, osproc, parseutils, strutils, tables, terminal, times]
 import frontend
 import generator
 import project
+
+proc parseListenPort(portStr: string): int =
+  result = 5000
+  let s = portStr.strip()
+  if s.len == 0:
+    return
+  var value = 0
+  let consumed = parseutils.parseInt(s, value, 0)
+  if consumed == s.len and value >= 1 and value <= 65535:
+    result = value
+
+proc tcpBindPortAvailable(port: int): bool =
+  var socket = newSocket()
+  defer: socket.close()
+  try:
+    socket.setSockOpt(OptReuseAddr, true)
+    socket.bindAddr(Port(port), "0.0.0.0")
+    return true
+  except CatchableError:
+    return false
+
+proc pickDevelopmentListenPort(requested: int): int =
+  ## Uses ``requested`` when free; otherwise scans upward for a bindable TCP port.
+  result = requested
+  for _ in 0 ..< 256:
+    if tcpBindPortAvailable(result):
+      return
+    inc result
+
+proc echoDevListenInfo(requested, actual: int) =
+  styledEcho fgCyan, "  requested port: ", $requested
+  styledEcho fgCyan, "  actual port:    ", $actual
+  styledEcho fgGreen, "  http://localhost:", $actual
 
 proc normalizeWatchPath(path: string): string =
   path.replace('\\', '/')
@@ -75,11 +108,19 @@ proc buildAndRunServer*(appDir, outDir, mainPath: string): Process =
     styledEcho fgRed, "❌ Frontend build failed. Keeping dev server alive and waiting for fixes..."
     echo frontendResult.message
 
-  let port = config.port
+  let requestedPort = parseListenPort(config.port)
+  let actualPort = pickDevelopmentListenPort(requestedPort)
+  let port = $actualPort
+  if actualPort != requestedPort:
+    styledEcho fgYellow, "⚠ Port ", $requestedPort,
+        " is in use; starting on ", port, " instead."
   # Ensure PORT is passed correctly to compiler & runtime
   let compRes = runNimCompile(config, bmDev, mainPath, [("PORT", port)])
   if compRes != 0:
     styledEcho fgRed, "❌ Compilation failed. Waiting for changes..."
+    if config.devIncremental:
+      styledEcho fgYellow,
+          "Hint: Nim incremental dev builds sometimes fail with internal errors (e.g. `=copy` for `string`). Set `\"devIncremental\": false` in crown.json to disable `--incremental:on` for `crown dev`."
     return nil
 
   let binPath = mainPath[0 .. ^5] # remove .nim
@@ -93,8 +134,8 @@ proc buildAndRunServer*(appDir, outDir, mainPath: string): Process =
       return nil
     runPath = binPathAlt
 
-  styledEcho fgGreen, "✅ Compiled successfully. Starting server on port ",
-      port, "..."
+  styledEcho fgGreen, "✅ Compiled successfully. Starting dev server..."
+  echoDevListenInfo(requestedPort, actualPort)
   return startProcess(runPath,
     env = buildProcessEnv([("PORT", port), ("ENV", "development")]),
     options = {poParentStreams}
