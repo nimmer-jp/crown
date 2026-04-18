@@ -1,11 +1,15 @@
 import std/macros
 import std/hashes
 import std/strformat
-import std/[httpcore, asyncdispatch, json, os, strutils]
+import std/[httpcore, asyncdispatch, asyncnet, json, os, strutils, tables]
+
+import basolato/core/templates
+export templates.tmpl
+when declared(tmpli):
+  export templates.tmpli
 
 import basolato/controller except html
 import basolato/core/response as basolatoResponse
-import basolato/core/templates
 
 export strformat, httpcore, asyncdispatch, json, os, strutils
 
@@ -31,24 +35,61 @@ proc crownJoinGreedy*(p: Params, slotCount: int, slotPrefix = "g"): string =
 
 proc crownParamsWithCatch*(p: Params, catchName, catchValue: string): Params =
   ## Copies ``p`` and sets ``catchName`` to the merged greedy path (for handlers using ``req.getStr("slug")``).
+  ## Path ``Param`` values are copied by value so merged params stay independent of Basolato's internal tables.
   result = Params.new()
   if not p.isNil:
     for k, v in p.pairs:
-      result[k] = v
+      result[k] = Param.new($v, v.fileName, v.ext)
   result[catchName] = Param.new(catchValue)
 
 # Expose `postParams` and `queryParams` behavior since they're just params in Basolato
 proc postParams*(r: Request): Params = r.params
 proc queryParams*(r: Request): Params = r.params
 
+proc clientIp*(r: Request): string =
+  ## Client address using ``X-Forwarded-For`` (first hop), then ``X-Real-IP``, then the TCP peer.
+  let req = r.context.request
+  if not req.headers.isNil:
+    let xff = req.headers.getOrDefault("X-Forwarded-For").strip()
+    if xff.len > 0:
+      let first = xff.split(',', 1)[0].strip()
+      if first.len > 0:
+        return first
+    let xri = req.headers.getOrDefault("X-Real-IP").strip()
+    if xri.len > 0:
+      return xri
+  try:
+    if not req.client.isNil:
+      let (host, _) = getPeerAddr(req.client)
+      if host.len > 0:
+        return host
+  except OSError:
+    discard
+  return ""
+
+proc jsonBody*(r: Request): JsonNode =
+  ## Parses the raw body as JSON when ``Content-Type`` is ``application/json`` (``charset`` suffix allowed).
+  ## Returns ``JNull`` when the body is empty, the content type is not JSON, or parsing fails.
+  let req = r.context.request
+  if req.body.len == 0:
+    return newJNull()
+  if req.headers.isNil:
+    return newJNull()
+  let ct = req.headers.getOrDefault("Content-Type").toLowerAscii()
+  let base = ct.split(';', 1)[0].strip()
+  if base != "application/json":
+    return newJNull()
+  try:
+    return parseJson(req.body)
+  except CatchableError:
+    return newJNull()
+
 # Procedures manually exported
 export controller.newHttpHeaders
 export controller.getStr
-export controller.getOrDefault
 export basolatoResponse.body
 import tiara
 export tiara.Html
-export templates.tmpli
 
 type Layout* = string
 
@@ -129,7 +170,7 @@ const clientJsPath = currentSourcePath().parentDir() / "client.js"
 const clientNimPath = currentSourcePath().parentDir() / "client.nim"
 const buildCmd = "nim js -d:release --hints:off -o:" & clientJsPath & " " & clientNimPath
 const _ {.used.} = staticExec(buildCmd)
-const clientJsCode = staticRead("client.js")
+const clientJsCode = staticRead(clientJsPath)
 
 const crownClientJs = """
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -149,7 +190,6 @@ const crownDevOverlayJs = """
   if (window.__crownDevOverlayInstalled) return;
   window.__crownDevOverlayInstalled = true;
 
-  var compileMessage = "";
   var runtimeMessage = "";
 
   function escapeHtml(value) {
@@ -181,21 +221,16 @@ const crownDevOverlayJs = """
 
   function render() {
     var overlay = ensureOverlay();
-    var activeMessage = compileMessage || runtimeMessage;
+    var activeMessage = runtimeMessage;
     if (!activeMessage) {
       overlay.style.display = "none";
       return;
     }
-    var title = compileMessage ? "Crown Frontend Compile Error" : "Crown Runtime Error";
+    var title = "Crown Runtime Error";
     overlay.innerHTML = "<div style='font-weight:700;font-size:16px;margin-bottom:12px'>" +
       escapeHtml(title) +
       "</div><div>" + escapeHtml(activeMessage) + "</div>";
     overlay.style.display = "block";
-  }
-
-  function setCompile(message) {
-    compileMessage = String(message || "").trim();
-    render();
   }
 
   function setRuntime(message) {
@@ -219,22 +254,6 @@ const crownDevOverlayJs = """
     var reason = event && event.reason ? event.reason : "Unhandled promise rejection";
     setRuntime(reason && reason.stack ? reason.stack : String(reason));
   });
-
-  async function pollCompileError() {
-    try {
-      var res = await fetch("/__crown/dev/frontend-error", { cache: "no-store" });
-      if (res.ok) {
-        var payload = await res.json();
-        var msg = payload && typeof payload.error === "string" ? payload.error : "";
-        setCompile(msg);
-      }
-    } catch (_) {
-      // Keep polling even if the endpoint is temporarily unavailable.
-    }
-    setTimeout(pollCompileError, 1000);
-  }
-
-  pollCompileError();
 })();
 </script>
 """
@@ -402,14 +421,6 @@ proc injectCrownSystem*(content: string, routePath = ""): string =
     injectStr &= "        };\n"
     injectStr &= "        window.addEventListener('online', syncIfOnline);\n"
     injectStr &= "      });\n"
-    injectStr &= "    });\n"
-    injectStr &= "  }\n"
-    injectStr &= "</script>\n"
-  else:
-    injectStr &= "<script>\n"
-    injectStr &= "  if ('serviceWorker' in navigator) {\n"
-    injectStr &= "    navigator.serviceWorker.getRegistrations().then(function(registrations) {\n"
-    injectStr &= "      for(let registration of registrations) { registration.unregister(); }\n"
     injectStr &= "    });\n"
     injectStr &= "  }\n"
     injectStr &= "</script>\n"
