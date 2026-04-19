@@ -383,7 +383,10 @@ proc hasStylesheetReference(contentLower, hrefPath: string): bool =
   contentLower.contains("href=\"" & h & "\"") or contentLower.contains("href='" & h & "'")
 
 proc injectCrownSystem*(content: string, routePath = ""): string =
-  ## Injects Crown system scripts and Tailwind CSS into the HTML content.
+  ## Injects Crown system scripts and Tailwind (or built CSS), ``routeScripts``,
+  ## optional dev overlay, and PWA tags. Skipped for a response when the
+  ## ``Crown-Disable-Inject`` header is set (see ``disableCrownInject``), independently
+  ## of layout. Inserts before ``</head>`` when present, else before ``<body>``, else prepends.
   let lowerContent = content.toLowerAscii()
   var injectStr = crownClientJs
   let config = getCrownConfig()
@@ -456,15 +459,37 @@ proc plainTextResponse*(content: string, status = Http200): Response =
   headers["Content-Type"] = "text/plain; charset=utf-8"
   Response.new(status, content, headers)
 
-proc disableLayout*(res: var Response): var Response =
-  ## Explicitly disables the layout injection for this response.
+proc disableLayout*(res: var Response; keepInject = true): var Response =
+  ## Disables wrapping with ``src/app/layout/layout.nim`` (or the layout chosen by
+  ## your ``page`` proc’s second parameter). Does **not** affect
+  ## ``injectCrownSystem`` unless ``keepInject`` is ``false`` (legacy one-shot:
+  ## layout and Tailwind / client scripts / PWA head tags all skipped).
+  ##
+  ## Equivalent response headers: ``Crown-Disable-Layout`` is always set;
+  ## ``Crown-Disable-Inject`` is set only when ``keepInject`` is ``false``.
   res.headers["Crown-Disable-Layout"] = "true"
+  if not keepInject:
+    res.headers["Crown-Disable-Inject"] = "true"
   return res
 
-proc disableLayout*(res: Response): Response =
-  ## Explicitly disables the layout injection for this response.
+proc disableLayout*(res: Response; keepInject = true): Response =
+  ## Same as the ``var Response`` overload; returns a copy with updated headers.
   var clonedHeaders = res.headers
   clonedHeaders["Crown-Disable-Layout"] = "true"
+  if not keepInject:
+    clonedHeaders["Crown-Disable-Inject"] = "true"
+  return Response.new(res.status, res.body(), clonedHeaders)
+
+proc disableCrownInject*(res: var Response): var Response =
+  ## Skips ``injectCrownSystem`` (Tailwind / built JS / dev overlay / PWA tags)
+  ## for this HTML response. Layout wrapping is unchanged; combine with
+  ## ``disableLayout`` when returning a fully self-contained document.
+  res.headers["Crown-Disable-Inject"] = "true"
+  return res
+
+proc disableCrownInject*(res: Response): Response =
+  var clonedHeaders = res.headers
+  clonedHeaders["Crown-Disable-Inject"] = "true"
   return Response.new(res.status, res.body(), clonedHeaders)
 
 proc withHeader*(res: Response, key, val: string): Response =

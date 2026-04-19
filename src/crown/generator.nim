@@ -268,7 +268,9 @@ proc generateRoutesCode*(appDir: string, isDev: bool = false): string =
         else:
           entries.add(entry)
 
-  var code = "import std/os\nimport std/json\nimport basolato except html\nimport crown/core\nimport std/asyncdispatch\n"
+  var code = "import std/json\nimport basolato except html\nimport crown/core\nimport std/asyncdispatch\n"
+  if isDev:
+    code = "import std/os\n" & code
   var uniqueImports = initHashSet[string]()
 
   # Import all layouts safely
@@ -357,16 +359,19 @@ proc generateRoutesCode*(appDir: string, isDev: bool = false): string =
         code &= &"    elif res.headers.hasKey(\"content-type\"): contentType = $res.headers[\"content-type\"]\n"
         let isPage = if m in ["page"]: "true" else: "false"
         code &= &"    let isLayoutEnabled = {isPage} and not res.headers.hasKey(\"Crown-Disable-Layout\")\n"
-        code &= &"    if contentType.contains(\"text/html\") and isLayoutEnabled:\n"
+        code &= &"    let isCrownInjectEnabled = {isPage} and not res.headers.hasKey(\"Crown-Disable-Inject\")\n"
+        code &= &"    if contentType.contains(\"text/html\") and (isLayoutEnabled or isCrownInjectEnabled):\n"
         code &= &"      var htmlContent = res.body()\n"
+        code &= &"      if isLayoutEnabled:\n"
         if explicitLayout != "":
           let layoutNameSpace = "crown_layout_" & explicitLayout
-          code &= &"      when compiles({layoutNameSpace}.layout(htmlContent)):\n"
-          code &= &"        htmlContent = {layoutNameSpace}.layout(htmlContent)\n"
+          code &= &"        when compiles({layoutNameSpace}.layout(htmlContent)):\n"
+          code &= &"          htmlContent = {layoutNameSpace}.layout(htmlContent)\n"
         else:
-          code &= &"      when compiles(crown_layout_layout.layout(htmlContent)):\n"
-          code &= &"        htmlContent = crown_layout_layout.layout(htmlContent)\n"
-        code &= &"      htmlContent = injectCrownSystem(htmlContent, \"{e.urlPath}\")\n"
+          code &= &"        when compiles(crown_layout_layout.layout(htmlContent)):\n"
+          code &= &"          htmlContent = crown_layout_layout.layout(htmlContent)\n"
+        code &= &"      if isCrownInjectEnabled:\n"
+        code &= &"        htmlContent = injectCrownSystem(htmlContent, \"{e.urlPath}\")\n"
         code &= &"      res = htmlResponse(htmlContent, res.status)\n"
         code &= &"    return res\n"
         code &= &"  ),\n"
@@ -413,11 +418,14 @@ proc generateRoutesCode*(appDir: string, isDev: bool = false): string =
     code &= &"    if res.headers.hasKey(\"Content-Type\"): contentType = $res.headers[\"Content-Type\"]\n"
     code &= &"    elif res.headers.hasKey(\"content-type\"): contentType = $res.headers[\"content-type\"]\n"
     code &= &"    let isLayoutEnabled = not res.headers.hasKey(\"Crown-Disable-Layout\")\n"
-    code &= &"    if contentType.contains(\"text/html\") and isLayoutEnabled:\n"
+    code &= &"    let isCrownInjectEnabled = not res.headers.hasKey(\"Crown-Disable-Inject\")\n"
+    code &= &"    if contentType.contains(\"text/html\") and (isLayoutEnabled or isCrownInjectEnabled):\n"
     code &= &"      var htmlContent = res.body()\n"
-    code &= &"      when compiles(crown_layout_layout.layout(htmlContent)):\n"
-    code &= &"        htmlContent = crown_layout_layout.layout(htmlContent)\n"
-    code &= &"      htmlContent = injectCrownSystem(htmlContent, \"/{{path:str}}\")\n"
+    code &= &"      if isLayoutEnabled:\n"
+    code &= &"        when compiles(crown_layout_layout.layout(htmlContent)):\n"
+    code &= &"          htmlContent = crown_layout_layout.layout(htmlContent)\n"
+    code &= &"      if isCrownInjectEnabled:\n"
+    code &= &"        htmlContent = injectCrownSystem(htmlContent, \"/{{path:str}}\")\n"
     code &= &"      res = htmlResponse(htmlContent, res.status)\n"
     code &= &"    return res\n"
     code &= &"  ),\n"

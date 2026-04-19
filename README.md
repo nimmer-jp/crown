@@ -27,8 +27,8 @@ Crown is a next-generation meta-framework for the [Nim](https://nim-lang.org/) p
 Initialize a new Crown project in seconds:
 
 ```bash
-# 1. Install the crown CLI (using Nimble)
-nimble install -y https://github.com/valit/crown
+# 1. Install the crown CLI (using Nimble; -y accepts prompts)
+nimble -y install https://github.com/valit/crown
 
 # 2. Create a new directory and initialize the project
 mkdir my_awesome_app
@@ -39,7 +39,9 @@ crown init
 crown dev
 ```
 
-_(Your app will be available at `http://localhost:5000/` with hot-reloading enabled!)_
+`crown init` always scaffolds into the **current directory** (it does not take a project name argument—create the folder and `cd` into it first).
+
+_(By default `crown.json` uses port **5000**. If that TCP port is already in use, `crown dev` picks the next free port and prints the actual URL. Hot reload is enabled.)_
 
 ## 📂 File-System Routing
 
@@ -224,19 +226,36 @@ For transient states like modal visibility, active tabs, or drag-and-drop indica
 
 Crown provides a centralized layout system in `src/app/layout/`.
 
+| Concern | What applies | Notes |
+|--------|----------------|-------|
+| Layout template (`layout.nim` or custom) | Only **`page`** exports | Renaming `page` → `get` (or only defining `get`) means **no** automatic layout; return your own shell HTML or add a shared helper. |
+| `injectCrownSystem` (Tailwind, `routeScripts`, dev overlay, PWA tags) | Only **`page`** HTML responses | Injected once when enabled; skipped if the HTML already contains the same script/link (see `injectCrownSystem` in `crown/core`). |
+| `post`, `get`, `put`, … | Neither layout nor Crown inject by default | Fine for JSON and partial HTML; full documents are up to you. |
+
 - **Default Layout**: Any `page` function without a custom layout parameter is automatically wrapped by `src/app/layout/layout.nim`.
-- **Custom Layouts**: You can specify a layout by adding a second parameter to your `page` function: `proc page*(req: Request, layout: Layout = "admin")`. This will look for `src/app/layout/admin.nim`.
-- **Disable Layout**: If you want to return a raw snippet without any layout (e.g., for HTMX parts), use `res.disableLayout()` or handle it via `post` routes which don't apply layouts by default.
+- **Custom Layouts**: Add a second parameter to `page`: `proc page*(req: Request, layout: Layout = "admin")` loads `src/app/layout/admin.nim`.
+- **Disable layout only**: `htmlResponse(...).disableLayout()` sets `Crown-Disable-Layout`. Layout wrapping is skipped; **`injectCrownSystem` still runs** (default `keepInject = true`), so full-page HTML can follow `crown.json` without duplicating Tailwind CDNs in the handler.
+- **Disable Crown inject only**: `disableCrownInject` / header `Crown-Disable-Inject` skips Tailwind, bundled scripts, dev overlay, and PWA injection. Layout behavior is unchanged.
+- **Legacy “skip everything”**: `disableLayout(keepInject = false)` sets both `Crown-Disable-Layout` and `Crown-Disable-Inject` (same net effect as older Crown, where one flag did both).
+
+Response headers mirror the API: `Crown-Disable-Layout`, `Crown-Disable-Inject`.
+
+### Basolato, `getEnv`, and `.env`
+
+Basolato loads application `.env` according to its own startup order. If you call `std/os.getEnv` or `dotenv` at **module import time** in a module that renders HTML, values may not be loaded yet compared to reading them **inside** a request handler after Basolato initialized. Prefer resolving secrets and config when handling a request (or after Basolato’s env load) so server-rendered HTML matches runtime configuration.
 
 ## 🛠 Command Line Interface
 
 Crown comes with a powerful CLI to manage your project lifecycle.
 
-- `crown init` — Scaffolds a new barebones project structure natively.
+- `crown init` — Scaffolds a new barebones project structure in the **current directory** (no project-name argument).
 - `crown dev` — Boots the development server. It watches your `src/` directory and auto-recompiles routes dynamically.
 - `crown build` — Compiles your application into a highly optimized, production-ready static binary inside the `.crown` directory (`.crown/main`).
+- `crown start` — Runs the built binary from `.crown/main` for production (requires `crown build` first). Sets `ENV=production` and `PORT` from `crown.json`.
 - `crown test` — Runs `nimble test -y` in the current project (requires `crown.nimble`).
 - `crown check` — Regenerates `.crown/routes.nim` / `main.nim` and runs `nim check` on the entrypoint (fast type/syntax check without a full link).
+
+All of `crown dev`, `crown build`, and `crown check` accept `--appDir` (default `src/app`) and `--outDir` (default `.crown`). `crown start` accepts `--outDir` only.
 
 ## ⚙️ Compiler and Watcher Config
 
@@ -268,7 +287,9 @@ If you want to switch backend explicitly, set a backend define/undef flag in `ni
 
 ### Tailwind: CDN vs CLI (`crown.json`)
 
-The top-level `"tailwind": true|false` still works. For production-sized CSS, you can use the **standalone Tailwind CLI** on `PATH` as `tailwindcss`:
+The top-level `"tailwind": true|false` still works. If `tailwind` is a JSON object, you can set `"enabled": false` to turn off Tailwind injection entirely.
+
+For production-sized CSS, you can use the **standalone Tailwind CLI** on `PATH` as `tailwindcss`:
 
 ```json
 {
@@ -302,6 +323,8 @@ Crown now includes a minimal Next.js-like frontend baseline in `crown dev`:
   - Example: `src/app/blog/client.js` is loaded on `/blog/{id:str}`
 
 ### Optional `frontend` Config (`crown.json`)
+
+If you omit a `frontend` block, Crown still defaults to an **enabled** frontend pipeline (`src/app.js` → `public/app.js`, route entries, Bun-or-copy builder, dev overlay). Set `"enabled": false` under `frontend` (or `frontendEnabled` at the top level) to turn it off.
 
 ```json
 {

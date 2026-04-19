@@ -1,5 +1,6 @@
 import std/options
 import std/sequtils
+import std/strutils
 import std/unittest
 import crown/generator
 
@@ -84,3 +85,15 @@ suite "Generator tests":
     check normalizeCatchAllMarkersForClient("/x/{@a}/y") == "/x/{_a:catch}/y"
     let root = "/proj/src/app"
     check resolveUrlPath(root, "/proj/src/app/wiki/p___page/page.nim") == "/wiki/{@page}"
+
+  test "generateRoutesCode splits layout vs inject flags and omits std/os when not dev":
+    let appDir = "example/src/app"
+    let prod = generateRoutesCode(appDir, isDev = false)
+    check "let isCrownInjectEnabled" in prod
+    check "Crown-Disable-Inject" in prod
+    check "if isLayoutEnabled:" in prod
+    check "if isCrownInjectEnabled:" in prod
+    check "import std/os\n" notin prod
+
+    let dev = generateRoutesCode(appDir, isDev = true)
+    check dev.startsWith("import std/os\nimport std/json\n")
