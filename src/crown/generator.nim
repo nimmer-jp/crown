@@ -88,7 +88,7 @@ proc generateRoutesCode*(appDir: string, isDev: bool = false): string =
         else:
           entries.add(entry)
 
-  var code = "import std/os\nimport basolato except html\nimport crown/core\nimport std/asyncdispatch\n"
+  var code = "import std/os\nimport crown/core as crown\nimport basolato except html\nimport std/asyncdispatch\n"
   var uniqueImports = initHashSet[string]()
 
   # Import all layouts safely
@@ -134,9 +134,9 @@ proc generateRoutesCode*(appDir: string, isDev: bool = false): string =
       routeNames.add(rn)
 
       # Generate a wrapper proc inline that intelligently tries to call the page handlers
-      code &= &"let {rn} = crownRouteRegister(Route.{httpMethod}, \"{e.urlPath}\"):\n"
-      code &= &"    var res: Response\n"
-      code &= &"    let req = Request(context: c, params: p)\n"
+      code &= &"let {rn} = crownRouteRegister(\"{httpMethod}\", \"{e.urlPath}\"):\n"
+      code &= &"    var res: crown.Response\n"
+      code &= &"    let req = crown.Request(context: c, params: p)\n"
       code &= &"    when compiles({e.importName}.{m}(req, {explicitArg})):\n"
       code &= &"      when type({e.importName}.{m}(req, {explicitArg})) is string:\n"
       code &= &"        res = htmlResponse({e.importName}.{m}(req, {explicitArg}))\n"
@@ -144,7 +144,7 @@ proc generateRoutesCode*(appDir: string, isDev: bool = false): string =
       code &= &"        res = htmlResponse(${e.importName}.{m}(req, {explicitArg}))\n"
       code &= &"      elif type({e.importName}.{m}(req, {explicitArg})) is Future[Html]:\n"
       code &= &"        res = htmlResponse($(await {e.importName}.{m}(req, {explicitArg})))\n"
-      code &= &"      elif type({e.importName}.{m}(req, {explicitArg})) is Response:\n"
+      code &= &"      elif type({e.importName}.{m}(req, {explicitArg})) is crown.Response:\n"
       code &= &"        res = {e.importName}.{m}(req, {explicitArg})\n"
       code &= &"      else:\n"
       code &= &"        res = await {e.importName}.{m}(req, {explicitArg})\n"
@@ -155,7 +155,7 @@ proc generateRoutesCode*(appDir: string, isDev: bool = false): string =
       code &= &"        res = htmlResponse(${e.importName}.{m}(req))\n"
       code &= &"      elif type({e.importName}.{m}(req)) is Future[Html]:\n"
       code &= &"        res = htmlResponse($(await {e.importName}.{m}(req)))\n"
-      code &= &"      elif type({e.importName}.{m}(req)) is Response:\n"
+      code &= &"      elif type({e.importName}.{m}(req)) is crown.Response:\n"
       code &= &"        res = {e.importName}.{m}(req)\n"
       code &= &"      else:\n"
       code &= &"        res = await {e.importName}.{m}(req)\n"
@@ -167,7 +167,7 @@ proc generateRoutesCode*(appDir: string, isDev: bool = false): string =
       code &= &"        res = htmlResponse(${e.importName}.{m}(c, p))\n"
       code &= &"      elif type({e.importName}.{m}(c, p)) is Future[Html]:\n"
       code &= &"        res = htmlResponse($(await {e.importName}.{m}(c, p)))\n"
-      code &= &"      elif type({e.importName}.{m}(c, p)) is Response:\n"
+      code &= &"      elif type({e.importName}.{m}(c, p)) is crown.Response:\n"
       code &= &"        res = {e.importName}.{m}(c, p)\n"
       code &= &"      else:\n"
       code &= &"        res = await {e.importName}.{m}(c, p)\n"
@@ -195,9 +195,9 @@ proc generateRoutesCode*(appDir: string, isDev: bool = false): string =
     let rnNf = "crownRoute" & $crownIdx
     inc crownIdx
     routeNames.add(rnNf)
-    code &= &"let {rnNf} = crownRouteRegister(Route.get, \"/{{path:str}}\"):\n"
-    code &= &"    var res: Response\n"
-    code &= &"    let req = Request(context: c, params: p)\n"
+    code &= &"let {rnNf} = crownRouteRegister(\"get\", \"/{{path:str}}\"):\n"
+    code &= &"    var res: crown.Response\n"
+    code &= &"    let req = crown.Request(context: c, params: p)\n"
     code &= &"    when compiles({notFoundEntry.importName}.page(req, \"\")):\n"
     code &= &"      when type({notFoundEntry.importName}.page(req, \"\")) is string:\n"
     code &= &"        res = htmlResponse({notFoundEntry.importName}.page(req, \"\"))\n"
@@ -205,7 +205,7 @@ proc generateRoutesCode*(appDir: string, isDev: bool = false): string =
     code &= &"        res = htmlResponse(${notFoundEntry.importName}.page(req, \"\"))\n"
     code &= &"      elif type({notFoundEntry.importName}.page(req, \"\")) is Future[Html]:\n"
     code &= &"        res = htmlResponse($(await {notFoundEntry.importName}.page(req, \"\")))\n"
-    code &= &"      elif type({notFoundEntry.importName}.page(req, \"\")) is Response:\n"
+    code &= &"      elif type({notFoundEntry.importName}.page(req, \"\")) is crown.Response:\n"
     code &= &"        res = {notFoundEntry.importName}.page(req, \"\")\n"
     code &= &"      else:\n"
     code &= &"        res = await {notFoundEntry.importName}.page(req, \"\")\n"
@@ -216,7 +216,7 @@ proc generateRoutesCode*(appDir: string, isDev: bool = false): string =
     code &= &"        res = htmlResponse(${notFoundEntry.importName}.page(req))\n"
     code &= &"      elif type({notFoundEntry.importName}.page(req)) is Future[Html]:\n"
     code &= &"        res = htmlResponse($(await {notFoundEntry.importName}.page(req)))\n"
-    code &= &"      elif type({notFoundEntry.importName}.page(req)) is Response:\n"
+    code &= &"      elif type({notFoundEntry.importName}.page(req)) is crown.Response:\n"
     code &= &"        res = {notFoundEntry.importName}.page(req)\n"
     code &= &"      else:\n"
     code &= &"        res = await {notFoundEntry.importName}.page(req)\n"
@@ -227,7 +227,7 @@ proc generateRoutesCode*(appDir: string, isDev: bool = false): string =
     code &= &"        res = htmlResponse(${notFoundEntry.importName}.page(c, p))\n"
     code &= &"      elif type({notFoundEntry.importName}.page(c, p)) is Future[Html]:\n"
     code &= &"        res = htmlResponse($(await {notFoundEntry.importName}.page(c, p)))\n"
-    code &= &"      elif type({notFoundEntry.importName}.page(c, p)) is Response:\n"
+    code &= &"      elif type({notFoundEntry.importName}.page(c, p)) is crown.Response:\n"
     code &= &"        res = {notFoundEntry.importName}.page(c, p)\n"
     code &= &"      else:\n"
     code &= &"        res = await {notFoundEntry.importName}.page(c, p)\n"
@@ -249,7 +249,7 @@ proc generateRoutesCode*(appDir: string, isDev: bool = false): string =
     let rnDev = "crownRoute" & $crownIdx
     inc crownIdx
     routeNames.add(rnDev)
-    code &= "let " & rnDev & " = crownRouteRegister(Route.get, \"/routes\"):\n"
+    code &= "let " & rnDev & " = crownRouteRegister(\"get\", \"/routes\"):\n"
     code &= "    var html = \"\"\"<!DOCTYPE html><html><head><meta charset=\"utf-8\"><title>Crown Routes</title><script src=\"https://cdn.tailwindcss.com\"></script></head><body class=\"bg-gray-50 text-gray-800 p-8\"><div class=\"max-w-4xl mx-auto\"><h1 class=\"text-3xl font-bold mb-6\">👑 Crown Registered Routes</h1><div class=\"bg-white shadow rounded-lg overflow-hidden\"><table class=\"min-w-full\"><thead class=\"bg-gray-100\"><tr><th class=\"px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider\">Path</th><th class=\"px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider\">File</th><th class=\"px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider\">Methods</th></tr></thead><tbody class=\"divide-y divide-gray-200\">\"\"\"\n"
     for e in entries:
       var mNames = ""

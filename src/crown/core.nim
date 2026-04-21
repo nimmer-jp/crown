@@ -5,37 +5,93 @@ import std/[httpcore, asyncdispatch, json, os, strutils]
 when not (defined(httpbeast) or defined(httpx)):
   import std/asyncnet
 
-import basolato/controller except html
+import basolato/controller as baco except html
 import basolato/core/response as basolatoResponse
 import basolato/core/templates
 
 export strformat, httpcore, asyncdispatch, json, os, strutils
 
 type
-  Context* = controller.Context
-  Params* = controller.Params
-  Response* = controller.Response
+  Context* = baco.Context
+  Params* = baco.Params
+  Response* = baco.Response
+  ## Aliases for ``crownRouteRegister`` expansion: the template is instantiated in the caller’s scope,
+  ## where ``Context`` / ``Response`` may be ambiguous (e.g. ``core.*`` vs Basolato’s ``context`` / ``response``).
+  BasolatoContext* = baco.Context
+  BasolatoParams* = baco.Params
+  BasolatoHttpResponse* = baco.Response
   Request* = ref object
     context*: Context
     params*: Params
 
-proc get*(r: Request, key: string): string = r.params.getStr(key)
 proc getStr*(r: Request, key: string): string = r.params.getStr(key)
 proc getOrDefault*(r: Params, key: string, default: string): string = r.getStr(
     key, default)
 
-template crownRouteRegister*(meth: untyped, path: static string, body: untyped): untyped =
+template crownRouteRegister*(httpMethod: static string, path: static string, body: untyped): untyped {.dirty.} =
   ## Basolato 0.16: ``Controller`` is ``proc(c: Context): Future[Response]`` with ``Context.params``.
   ## Basolato 0.15: ``proc(c: Context, p: Params): Future[Response]``.
-  when compiles((var c: Context; discard c.params())):
-    meth(path, proc(c: Context): Future[Response] {.async.} =
-      let p = c.params()
-      body
-    )
+  ##
+  ## First argument: ``"get"``, ``"post"``, ``"put"``, ``"patch"``, or ``"delete"``. Branches call
+  ## ``Route.get`` / ``Route.post`` / … explicitly (avoids unrelated ``get`` overloads).
+  ##
+  ## ``{.dirty.}`` + ``import crown/core`` before Basolato (see generator) keeps ``c`` / ``p`` bound
+  ## after ``{.async.}`` on Nim 2.2 + Basolato 0.15.
+  ##
+  ## ``when compiles`` uses ``BasolatoContext`` (exported from this module) so expansion sites never
+  ## pick Basolato’s ``context.Context`` by mistake.
+  when httpMethod == "get":
+    when compiles((var c: BasolatoContext; discard c.params())):
+      Route.get(path, proc(c: BasolatoContext): Future[BasolatoHttpResponse] {.async.} =
+        let p = c.params()
+        body
+      )
+    else:
+      Route.get(path, proc(c: BasolatoContext, p: BasolatoParams): Future[BasolatoHttpResponse] {.async.} =
+        body
+      )
+  elif httpMethod == "post":
+    when compiles((var c: BasolatoContext; discard c.params())):
+      Route.post(path, proc(c: BasolatoContext): Future[BasolatoHttpResponse] {.async.} =
+        let p = c.params()
+        body
+      )
+    else:
+      Route.post(path, proc(c: BasolatoContext, p: BasolatoParams): Future[BasolatoHttpResponse] {.async.} =
+        body
+      )
+  elif httpMethod == "put":
+    when compiles((var c: BasolatoContext; discard c.params())):
+      Route.put(path, proc(c: BasolatoContext): Future[BasolatoHttpResponse] {.async.} =
+        let p = c.params()
+        body
+      )
+    else:
+      Route.put(path, proc(c: BasolatoContext, p: BasolatoParams): Future[BasolatoHttpResponse] {.async.} =
+        body
+      )
+  elif httpMethod == "patch":
+    when compiles((var c: BasolatoContext; discard c.params())):
+      Route.patch(path, proc(c: BasolatoContext): Future[BasolatoHttpResponse] {.async.} =
+        let p = c.params()
+        body
+      )
+    else:
+      Route.patch(path, proc(c: BasolatoContext, p: BasolatoParams): Future[BasolatoHttpResponse] {.async.} =
+        body
+      )
+  elif httpMethod == "delete":
+    when compiles((var c: BasolatoContext; discard c.params())):
+      Route.delete(path, proc(c: BasolatoContext): Future[BasolatoHttpResponse] {.async.} =
+        let p = c.params()
+        body
+      )
+    else:
+      Route.delete(path, proc(c: BasolatoContext, p: BasolatoParams): Future[BasolatoHttpResponse] {.async.} =
+        body
+      )
   else:
-    meth(path, proc(c: Context, p: Params): Future[Response] {.async.} =
-      body
-    )
+    {.error: "crownRouteRegister: unsupported httpMethod (use get, post, put, patch, delete)".}
 
 # Expose `postParams` and `queryParams` behavior since they're just params in Basolato
 proc postParams*(r: Request): Params = r.params
@@ -69,8 +125,8 @@ proc clientIp*(r: Request): string =
   return ""
 
 # Procedures manually exported
-export controller.newHttpHeaders
-export controller.getStr
+export baco.newHttpHeaders
+export baco.getStr
 export basolatoResponse.body
 import tiara
 export tiara.Html

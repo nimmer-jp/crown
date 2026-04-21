@@ -37,8 +37,9 @@ suite "Generator tests":
 
   test "generateRoutesCode uses crownRouteRegister for Basolato 0.16 / 0.15 dual Controller":
     let prod = generateRoutesCode("example/src/app", isDev = false)
+    check prod.contains("import crown/core as crown")
     check prod.contains("crownRouteRegister")
-    check prod.contains("let crownRoute0 = crownRouteRegister")
+    check prod.contains("let crownRoute0 = crownRouteRegister(\"get\"")
     check prod.contains("Routes.merge(@[")
     check prod.contains("crownRoute0, crownRoute1")
 
