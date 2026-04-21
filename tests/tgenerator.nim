@@ -94,6 +94,14 @@ suite "Generator tests":
     check "if isLayoutEnabled:" in prod
     check "if isCrownInjectEnabled:" in prod
     check "import std/os\n" notin prod
+    check "crownRouteRegister(Route.get," in prod
 
     let dev = generateRoutesCode(appDir, isDev = true)
     check dev.startsWith("import std/os\nimport std/json\n")
+
+  test "generateMainCode uses Settings when available and falls back to serve(routes)":
+    let main016 = generateMainCode("routes.nim")
+    check "import std/[os, strutils]" in main016
+    check "when compiles(Settings.new(port: 5000)):" in main016
+    check "serve(routes.routes, settings)" in main016
+    check "serve(routes.routes)\n" in main016

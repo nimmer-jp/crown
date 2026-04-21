@@ -1,7 +1,9 @@
 import std/macros
 import std/hashes
 import std/strformat
-import std/[httpcore, asyncdispatch, asyncnet, json, os, strutils, tables]
+import std/[httpcore, asyncdispatch, json, os, strutils, tables]
+when not (defined(httpbeast) or defined(httpx)):
+  import std/asyncnet
 
 import basolato/core/templates
 export templates.tmpl
@@ -39,8 +41,21 @@ proc crownParamsWithCatch*(p: Params, catchName, catchValue: string): Params =
   result = Params.new()
   if not p.isNil:
     for k, v in p.pairs:
-      result[k] = Param.new($v, v.fileName, v.ext)
+      result[k] = Param.new($v, v.fileName, ext(v))
   result[catchName] = Param.new(catchValue)
+
+template crownRouteRegister*(meth: untyped, path: static string, body: untyped): untyped =
+  ## Maps one route body onto Basolato 0.16 ``proc(c: Context): Future[Response]`` or
+  ## 0.15 ``proc(c: Context, p: Params): Future[Response]``.
+  when compiles((var c: Context; discard c.params())):
+    meth(path, proc(c: Context): Future[Response] {.async.} =
+      let p = c.params()
+      body
+    )
+  else:
+    meth(path, proc(c: Context, p: Params): Future[Response] {.async.} =
+      body
+    )
 
 # Expose `postParams` and `queryParams` behavior since they're just params in Basolato
 proc postParams*(r: Request): Params = r.params
@@ -58,13 +73,18 @@ proc clientIp*(r: Request): string =
     let xri = req.headers.getOrDefault("X-Real-IP").strip()
     if xri.len > 0:
       return xri
-  try:
-    if not req.client.isNil:
-      let (host, _) = getPeerAddr(req.client)
-      if host.len > 0:
-        return host
-  except OSError:
-    discard
+  when defined(httpbeast) or defined(httpx):
+    let h = req.hostname.strip()
+    if h.len > 0:
+      return h
+  else:
+    try:
+      if not req.client.isNil:
+        let (host, _) = getPeerAddr(req.client)
+        if host.len > 0:
+          return host
+    except OSError:
+      discard
   return ""
 
 proc jsonBody*(r: Request): JsonNode =

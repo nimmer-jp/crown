@@ -316,7 +316,7 @@ proc generateRoutesCode*(appDir: string, isDev: bool = false): string =
             "robots": "plainTextResponse" else: "htmlResponse"
 
         # Generate a wrapper proc inline that intelligently tries to call the page handlers
-        code &= &"  Route.{httpMethod}(\"{concretePath}\", proc(c: Context, p: Params): Future[Response] {{.async.}} =\n"
+        code &= &"  crownRouteRegister(Route.{httpMethod}, \"{concretePath}\"):\n"
         code &= &"    var res: Response\n"
         code &= reqLine
         code &= &"    when compiles({e.importName}.{m}(req, {explicitArg})):\n"
@@ -374,10 +374,10 @@ proc generateRoutesCode*(appDir: string, isDev: bool = false): string =
         code &= &"        htmlContent = injectCrownSystem(htmlContent, \"{e.urlPath}\")\n"
         code &= &"      res = htmlResponse(htmlContent, res.status)\n"
         code &= &"    return res\n"
-        code &= &"  ),\n"
+        code &= &"  ,\n"
 
   if hasNotFound:
-    code &= &"  Route.get(\"/{{path:str}}\", proc(c: Context, p: Params): Future[Response] {{.async.}} =\n"
+    code &= &"  crownRouteRegister(Route.get, \"/{{path:str}}\"):\n"
     code &= &"    var res: Response\n"
     code &= &"    let req = Request(context: c, params: p)\n"
     code &= &"    when compiles({notFoundEntry.importName}.page(req, \"\")):\n"
@@ -428,10 +428,10 @@ proc generateRoutesCode*(appDir: string, isDev: bool = false): string =
     code &= &"        htmlContent = injectCrownSystem(htmlContent, \"/{{path:str}}\")\n"
     code &= &"      res = htmlResponse(htmlContent, res.status)\n"
     code &= &"    return res\n"
-    code &= &"  ),\n"
+    code &= &"  ,\n"
 
   if isDev:
-    code &= "  Route.get(\"/__crown/dev/frontend-error\", proc(c: Context, p: Params): Future[Response] {.async.} =\n"
+    code &= "  crownRouteRegister(Route.get, \"/__crown/dev/frontend-error\"):\n"
     code &= "    let errPath = \".crown/frontend-error.json\"\n"
     code &= "    if fileExists(errPath):\n"
     code &= "      try:\n"
@@ -439,9 +439,9 @@ proc generateRoutesCode*(appDir: string, isDev: bool = false): string =
     code &= "      except:\n"
     code &= "        discard\n"
     code &= "    return jsonResponse(%*{\"error\": \"\"})\n"
-    code &= "  ),\n"
+    code &= "  ,\n"
 
-    code &= "  Route.get(\"/routes\", proc(c: Context, p: Params): Future[Response] {.async.} =\n"
+    code &= "  crownRouteRegister(Route.get, \"/routes\"):\n"
     code &= "    var html = \"\"\"<!DOCTYPE html><html><head><meta charset=\"utf-8\"><title>Crown Routes</title><script src=\"https://cdn.tailwindcss.com\"></script></head><body class=\"bg-gray-50 text-gray-800 p-8\"><div class=\"max-w-4xl mx-auto\"><h1 class=\"text-3xl font-bold mb-6\">👑 Crown Registered Routes</h1><div class=\"bg-white shadow rounded-lg overflow-hidden\"><table class=\"min-w-full\"><thead class=\"bg-gray-100\"><tr><th class=\"px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider\">Path</th><th class=\"px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider\">File</th><th class=\"px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider\">Methods</th></tr></thead><tbody class=\"divide-y divide-gray-200\">\"\"\"\n"
     for e in entries:
       var mNames = ""
@@ -451,7 +451,7 @@ proc generateRoutesCode*(appDir: string, isDev: bool = false): string =
       code &= "    html &= \"\"\"<tr class=\"hover:bg-gray-50\"><td class=\"px-6 py-4 whitespace-nowrap font-mono text-sm text-blue-600\"><a href=\"" & e.urlPath & "\">" & e.urlPath & "</a></td><td class=\"px-6 py-4 whitespace-nowrap text-sm text-gray-500\">src/" & e.filePath & ".nim</td><td class=\"px-6 py-4 whitespace-nowrap text-sm text-gray-500 font-mono\">" & mNames & "</td></tr>\"\"\"\n"
     code &= "    html &= \"\"\"</tbody></table></div></div></body></html>\"\"\"\n"
     code &= "    return htmlResponse(html)\n"
-    code &= "  ),\n"
+    code &= "  ,\n"
 
   code &= "]\n"
 
@@ -461,9 +461,25 @@ proc generateRoutesCode*(appDir: string, isDev: bool = false): string =
 
 proc generateMainCode*(routesPath: string): string =
   let moduleName = routesPath.replace(".nim", "")
-  return "import basolato except html\n" &
+  return "import std/[os, strutils]\n" &
+         "import basolato except html\n" &
          "import " & moduleName & "\n\n" &
-         "serve(" & moduleName & ".routes)\n"
+         "proc crownParsePortEnv(defaultPort: int): int =\n" &
+         "  let s = getEnv(\"PORT\", \"\").strip()\n" &
+         "  if s.len == 0:\n" &
+         "    return defaultPort\n" &
+         "  try:\n" &
+         "    return parseInt(s)\n" &
+         "  except ValueError:\n" &
+         "    return defaultPort\n\n" &
+         "when compiles(Settings.new(port: 5000)):\n" &
+         "  let port = crownParsePortEnv(5000)\n" &
+         "  let hostRaw = getEnv(\"HOST\", \"0.0.0.0\").strip()\n" &
+         "  let host = if hostRaw.len > 0: hostRaw else: \"0.0.0.0\"\n" &
+         "  let settings = Settings.new(host = host, port = port)\n" &
+         "  serve(" & moduleName & ".routes, settings)\n" &
+         "else:\n" &
+         "  serve(" & moduleName & ".routes)\n"
 
 proc getCrownConfig(): JsonNode =
   result = %*{"tailwind": true, "pwa": false}
