@@ -219,7 +219,20 @@ Crown provides a centralized layout system in `src/app/layout/`.
 - **Custom Layouts**: You can specify a layout by adding a second parameter to your `page` function: `proc page*(req: Request, layout: Layout = "admin")`. This will look for `src/app/layout/admin.nim`.
 - **Disable Layout**: If you want to return a raw snippet without any layout (e.g., for HTMX parts), use `res.disableLayout()` or handle it via `post` routes which don't apply layouts by default.
 
-```
+## 🔗 Basolato and Nim versions
+
+Crown supports **Basolato 0.15.0 through 0.16.x** and **Nim 2.2.x** (Nim ≥ 2.0 is required by `crown.nimble`).
+
+| Basolato | Controller shape | Notes |
+|----------|------------------|--------|
+| 0.16.x | `proc(c: Context): Future[Response]` with `let p = c.params()` | Generated `.crown/routes.nim` uses `crownRouteRegister("get", ...)` and `Routes.merge` when available. |
+| 0.15.x | `proc(c: Context, p: Params): Future[Response]` | Same macro; `when compiles` picks the two-argument branch. `Routes.merge` is omitted; routes are a `seq[Routes]`. |
+
+**HTTP backend:** Basolato 0.16 with the stdlib server can hit GC-safety / `createResponse` issues on Nim 2.2; Crown defaults to **`-d:httpbeast`** (see `tests/config.nims` and `crown.json` `nimFlags`). For Basolato 0.15 projects, align your `nim.cfg` / `crown.json` flags with the same backend defines your Basolato install expects (often `-d:httpbeast` or `-d:httpx`).
+
+**Name clashes:** In generated routes, Crown uses `import crown/core as crown` and qualifies `crown.Request` / `crown.Response` so they do not collide with Basolato’s `request` / `response` modules. The `crownRouteRegister` template uses exported aliases `BasolatoContext`, `BasolatoParams`, and `BasolatoHttpResponse` internally so expansion stays unambiguous with `import basolato/controller`.
+
+**Issue repro (Basolato 0.15 + Nim 2.2):** Pin `basolato@0.15.0` in your app or `nimble`, use Nim 2.2.x from `PATH` (not a broken Nimble-cached copy), set `SECRET_KEY` before Basolato loads (see `tests/crown_test_env.nim`), add `-d:httpbeast` as in `tests/config.nims`, then `nimble test` from the Crown repo or `nim c -r -d:httpbeast tests/tcrown_route_register.nim`.
 
 ## 🛠 Command Line Interface
 
@@ -258,4 +271,3 @@ We welcome contributions to make Crown the ultimate full-stack framework for Nim
 ## 📄 License
 
 This project is licensed under the MIT License.
-```

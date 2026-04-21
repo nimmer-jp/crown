@@ -1,3 +1,5 @@
+import ./crown_test_env
+discard crownTestsEnvReady
 import std/unittest
 import std/strutils
 import crown/core
