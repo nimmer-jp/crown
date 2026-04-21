@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.5
+
+- **generateRoutesCode**: After per-route `let crownRouteN = ...`, emit `let routes* = Routes.merge(@[crownRoute0, ...])` when `Routes.merge` exists (Basolato 0.16+); else `let routes* = @[...]` for 0.15.
+- **generateMainCode**: `serve(@[routes.routes], …)` when routes are merged to a single `Routes`; else `serve(routes.routes, …)` for legacy `seq[Routes]`.
+
 ## 0.4.4
 
 - **generateRoutesCode**: Emit each route as `let crownRouteN = crownRouteRegister(...): ...` then `let routes* = @[crownRoute0, ...]`. Colon-syntax template calls cannot be `@[ ... ]` elements in Nim 2.x (parse error).

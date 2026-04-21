@@ -39,12 +39,13 @@ suite "Generator tests":
     let prod = generateRoutesCode("example/src/app", isDev = false)
     check prod.contains("crownRouteRegister")
     check prod.contains("let crownRoute0 = crownRouteRegister")
-    check prod.contains("let routes* = @[")
+    check prod.contains("Routes.merge(@[")
     check prod.contains("crownRoute0, crownRoute1")
 
   test "generateMainCode uses Settings when available else serve(routes) only (0.15 compat)":
     let mainCode = generateMainCode("routes.nim")
     check "import std/[os, strutils]" in mainCode
     check "when compiles(Settings.new(port: 5000)):" in mainCode
-    check "serve(routes.routes, settings)" in mainCode
-    check "else:\n  serve(routes.routes)\n" in mainCode
+    check mainCode.contains("serve(@[routes.routes], settings)")
+    check mainCode.contains("serve(routes.routes, settings)")
+    check mainCode.contains("when compiles(Routes.merge(@[])):")

@@ -115,8 +115,8 @@ proc generateRoutesCode*(appDir: string, isDev: bool = false): string =
   if hasNotFound:
     code &= &"import ../src/{notFoundEntry.filePath} as {notFoundEntry.importName}\n"
 
-  ## Each route is a separate `let` binding: colon-syntax `crownRouteRegister` cannot be
-  ## valid as an element inside `@[ ... ]` (Nim parse error). Then `routes*` is `seq[Routes]`.
+  ## Each route is a separate `let`: colon-syntax `crownRouteRegister` cannot sit inside
+  ## `@[ ... ]`. Basolato 0.16+: `let routes* = Routes.merge(@[crownRoute0, ...])`; 0.15: `seq[Routes]`.
   code &= "\n"
   var routeNames: seq[string] = @[]
   var crownIdx = 0
@@ -262,9 +262,15 @@ proc generateRoutesCode*(appDir: string, isDev: bool = false): string =
     code &= "\n"
 
   if routeNames.len == 0:
-    code &= "let routes*: seq[Routes] = @[]\n"
+    code &= "when compiles(Routes.merge(@[])):\n"
+    code &= "  let routes* = Routes.merge(@[])\n"
+    code &= "else:\n"
+    code &= "  let routes*: seq[Routes] = @[]\n"
   else:
-    code &= "let routes* = @[" & join(routeNames, ", ") & "]\n"
+    code &= "when compiles(Routes.merge(@[])):\n"
+    code &= "  let routes* = Routes.merge(@[" & join(routeNames, ", ") & "])\n"
+    code &= "else:\n"
+    code &= "  let routes* = @[" & join(routeNames, ", ") & "]\n"
 
   return code
 
@@ -286,9 +292,15 @@ proc generateMainCode*(routesPath: string): string =
          "  let hostRaw = getEnv(\"HOST\", \"0.0.0.0\").strip()\n" &
          "  let host = if hostRaw.len > 0: hostRaw else: \"0.0.0.0\"\n" &
          "  let settings = Settings.new(host = host, port = port)\n" &
-         "  serve(" & moduleName & ".routes, settings)\n" &
+         "  when compiles(Routes.merge(@[])):\n" &
+         "    serve(@[" & moduleName & ".routes], settings)\n" &
+         "  else:\n" &
+         "    serve(" & moduleName & ".routes, settings)\n" &
          "else:\n" &
-         "  serve(" & moduleName & ".routes)\n"
+         "  when compiles(Routes.merge(@[])):\n" &
+         "    serve(@[" & moduleName & ".routes])\n" &
+         "  else:\n" &
+         "    serve(" & moduleName & ".routes)\n"
 
 proc getCrownConfig(): JsonNode =
   result = %*{"tailwind": true, "pwa": false}
