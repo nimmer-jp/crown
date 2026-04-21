@@ -1,6 +1,6 @@
 # Package
 
-version       = "0.4.3"
+version       = "0.4.4"
 author        = "pianopia"
 description   = "Next generation meta-framework for Nim, powered by Basolato and HTMX"
 license       = "MIT"

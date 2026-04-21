@@ -115,7 +115,12 @@ proc generateRoutesCode*(appDir: string, isDev: bool = false): string =
   if hasNotFound:
     code &= &"import ../src/{notFoundEntry.filePath} as {notFoundEntry.importName}\n"
 
-  code &= "\nlet routes* = @[\n"
+  ## Each route is a separate `let` binding: colon-syntax `crownRouteRegister` cannot be
+  ## valid as an element inside `@[ ... ]` (Nim parse error). Then `routes*` is `seq[Routes]`.
+  code &= "\n"
+  var routeNames: seq[string] = @[]
+  var crownIdx = 0
+
   for e in entries:
     for methodTuple in e.methods:
       let m = methodTuple.name
@@ -124,8 +129,12 @@ proc generateRoutesCode*(appDir: string, isDev: bool = false): string =
       let explicitArg = if explicitLayout != "": "\"" & explicitLayout &
           "\"" else: "\"\""
 
+      let rn = "crownRoute" & $crownIdx
+      inc crownIdx
+      routeNames.add(rn)
+
       # Generate a wrapper proc inline that intelligently tries to call the page handlers
-      code &= &"  crownRouteRegister(Route.{httpMethod}, \"{e.urlPath}\"):\n"
+      code &= &"let {rn} = crownRouteRegister(Route.{httpMethod}, \"{e.urlPath}\"):\n"
       code &= &"    var res: Response\n"
       code &= &"    let req = Request(context: c, params: p)\n"
       code &= &"    when compiles({e.importName}.{m}(req, {explicitArg})):\n"
@@ -180,10 +189,13 @@ proc generateRoutesCode*(appDir: string, isDev: bool = false): string =
       code &= &"      htmlContent = injectCrownSystem(htmlContent)\n"
       code &= &"      res = htmlResponse(htmlContent, res.status)\n"
       code &= &"    return res\n"
-      code &= &"  ,\n"
+      code &= "\n"
 
   if hasNotFound:
-    code &= &"  crownRouteRegister(Route.get, \"/{{path:str}}\"):\n"
+    let rnNf = "crownRoute" & $crownIdx
+    inc crownIdx
+    routeNames.add(rnNf)
+    code &= &"let {rnNf} = crownRouteRegister(Route.get, \"/{{path:str}}\"):\n"
     code &= &"    var res: Response\n"
     code &= &"    let req = Request(context: c, params: p)\n"
     code &= &"    when compiles({notFoundEntry.importName}.page(req, \"\")):\n"
@@ -231,10 +243,13 @@ proc generateRoutesCode*(appDir: string, isDev: bool = false): string =
     code &= &"      htmlContent = injectCrownSystem(htmlContent)\n"
     code &= &"      res = htmlResponse(htmlContent, res.status)\n"
     code &= &"    return res\n"
-    code &= &"  ,\n"
+    code &= "\n"
 
   if isDev:
-    code &= "  crownRouteRegister(Route.get, \"/routes\"):\n"
+    let rnDev = "crownRoute" & $crownIdx
+    inc crownIdx
+    routeNames.add(rnDev)
+    code &= "let " & rnDev & " = crownRouteRegister(Route.get, \"/routes\"):\n"
     code &= "    var html = \"\"\"<!DOCTYPE html><html><head><meta charset=\"utf-8\"><title>Crown Routes</title><script src=\"https://cdn.tailwindcss.com\"></script></head><body class=\"bg-gray-50 text-gray-800 p-8\"><div class=\"max-w-4xl mx-auto\"><h1 class=\"text-3xl font-bold mb-6\">👑 Crown Registered Routes</h1><div class=\"bg-white shadow rounded-lg overflow-hidden\"><table class=\"min-w-full\"><thead class=\"bg-gray-100\"><tr><th class=\"px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider\">Path</th><th class=\"px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider\">File</th><th class=\"px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider\">Methods</th></tr></thead><tbody class=\"divide-y divide-gray-200\">\"\"\"\n"
     for e in entries:
       var mNames = ""
@@ -244,11 +259,12 @@ proc generateRoutesCode*(appDir: string, isDev: bool = false): string =
       code &= "    html &= \"\"\"<tr class=\"hover:bg-gray-50\"><td class=\"px-6 py-4 whitespace-nowrap font-mono text-sm text-blue-600\"><a href=\"" & e.urlPath & "\">" & e.urlPath & "</a></td><td class=\"px-6 py-4 whitespace-nowrap text-sm text-gray-500\">src/" & e.filePath & ".nim</td><td class=\"px-6 py-4 whitespace-nowrap text-sm text-gray-500 font-mono\">" & mNames & "</td></tr>\"\"\"\n"
     code &= "    html &= \"\"\"</tbody></table></div></div></body></html>\"\"\"\n"
     code &= "    return htmlResponse(html)\n"
-    code &= "  ,\n"
+    code &= "\n"
 
-  code &= "]\n"
-
-
+  if routeNames.len == 0:
+    code &= "let routes*: seq[Routes] = @[]\n"
+  else:
+    code &= "let routes* = @[" & join(routeNames, ", ") & "]\n"
 
   return code
 
