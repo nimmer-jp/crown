@@ -1,5 +1,6 @@
 import std/unittest
 import std/sequtils
+import std/strutils
 import crown/generator
 
 suite "Generator tests":
@@ -33,3 +34,14 @@ suite "Generator tests":
     check makeImportAlias(r"app\page") == "app_page"
     check makeImportAlias("app/page") == "app_page"
     check makeImportAlias("app/admin-user/page") == "app_admin_user_page"
+
+  test "generateRoutesCode uses crownRouteRegister for Basolato 0.16 / 0.15 dual Controller":
+    let prod = generateRoutesCode("example/src/app", isDev = false)
+    check prod.contains("crownRouteRegister")
+
+  test "generateMainCode uses Settings when available else serve(routes) only (0.15 compat)":
+    let mainCode = generateMainCode("routes.nim")
+    check "import std/[os, strutils]" in mainCode
+    check "when compiles(Settings.new(port: 5000)):" in mainCode
+    check "serve(routes.routes, settings)" in mainCode
+    check "else:\n  serve(routes.routes)\n" in mainCode

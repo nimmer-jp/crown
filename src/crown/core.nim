@@ -2,6 +2,8 @@ import std/macros
 import std/hashes
 import std/strformat
 import std/[httpcore, asyncdispatch, json, os, strutils]
+when not (defined(httpbeast) or defined(httpx)):
+  import std/asyncnet
 
 import basolato/controller except html
 import basolato/core/response as basolatoResponse
@@ -21,18 +23,59 @@ proc get*(r: Request, key: string): string = r.params.getStr(key)
 proc getStr*(r: Request, key: string): string = r.params.getStr(key)
 proc getOrDefault*(r: Params, key: string, default: string): string = r.getStr(
     key, default)
+
+template crownRouteRegister*(meth: untyped, path: static string, body: untyped): untyped =
+  ## Basolato 0.16: ``Controller`` is ``proc(c: Context): Future[Response]`` with ``Context.params``.
+  ## Basolato 0.15: ``proc(c: Context, p: Params): Future[Response]``.
+  when compiles((var c: Context; discard c.params())):
+    meth(path, proc(c: Context): Future[Response] {.async.} =
+      let p = c.params()
+      body
+    )
+  else:
+    meth(path, proc(c: Context, p: Params): Future[Response] {.async.} =
+      body
+    )
+
 # Expose `postParams` and `queryParams` behavior since they're just params in Basolato
 proc postParams*(r: Request): Params = r.params
 proc queryParams*(r: Request): Params = r.params
 
+proc clientIp*(r: Request): string =
+  ## Client address: ``X-Forwarded-For`` (first hop), ``X-Real-IP``, then peer.
+  ## On httpbeast/httpx, ``request.hostname`` holds Basolato’s client address (not ``AsyncSocket``).
+  let req = r.context.request
+  if not req.headers.isNil:
+    let xff = req.headers.getOrDefault("X-Forwarded-For").strip()
+    if xff.len > 0:
+      let first = xff.split(',', 1)[0].strip()
+      if first.len > 0:
+        return first
+    let xri = req.headers.getOrDefault("X-Real-IP").strip()
+    if xri.len > 0:
+      return xri
+  when defined(httpbeast) or defined(httpx):
+    let h = req.hostname.strip()
+    if h.len > 0:
+      return h
+  else:
+    try:
+      if not req.client.isNil:
+        let (host, _) = getPeerAddr(req.client)
+        if host.len > 0:
+          return host
+    except OSError:
+      discard
+  return ""
+
 # Procedures manually exported
 export controller.newHttpHeaders
 export controller.getStr
-export controller.getOrDefault
 export basolatoResponse.body
 import tiara
 export tiara.Html
-export templates.tmpli
+when declared(templates.tmpli):
+  export templates.tmpli
 
 type Layout* = string
 
