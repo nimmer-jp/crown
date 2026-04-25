@@ -1,6 +1,6 @@
 # Package
 
-version       = "0.4.5"
+version       = "0.4.7"
 author        = "pianopia"
 description   = "Next generation meta-framework for Nim, powered by Basolato and HTMX"
 license       = "MIT"
@@ -21,4 +21,5 @@ requires "https://github.com/nimmer-jp/tiara"
 task test, "Run unit tests":
   exec "nim c -r -d:httpbeast tests/tcrown_route_register.nim"
   exec "nim c -r -d:httpbeast tests/tgenerator.nim"
+  exec "nim c -r -d:httpbeast --out:tests/tproject.out tests/tproject.nim"
   exec "nim c -r -d:httpbeast tests/tscoped_component.nim"

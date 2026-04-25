@@ -228,7 +228,7 @@ Crown supports **Basolato 0.15.0 through 0.16.x** and **Nim 2.2.x** (Nim ≥ 2.0
 | 0.16.x | `proc(c: Context): Future[Response]` with `let p = c.params()` | Generated `.crown/routes.nim` uses `crownRouteRegister("get", ...)` and `Routes.merge` when available. |
 | 0.15.x | `proc(c: Context, p: Params): Future[Response]` | Same macro; `when compiles` picks the two-argument branch. `Routes.merge` is omitted; routes are a `seq[Routes]`. |
 
-**HTTP backend:** Basolato 0.16 with the stdlib server can hit GC-safety / `createResponse` issues on Nim 2.2; Crown defaults to **`-d:httpbeast`** (see `tests/config.nims` and `crown.json` `nimFlags`). For Basolato 0.15 projects, align your `nim.cfg` / `crown.json` flags with the same backend defines your Basolato install expects (often `-d:httpbeast` or `-d:httpx`).
+**HTTP backend:** Basolato 0.16 with the stdlib server can hit GC-safety / `createResponse` issues on Nim 2.2; `crown build` and `crown dev` default to **`-d:httpbeast`**. For Basolato installs that need SSL and local app imports, Crown also adds **`-d:ssl`**, **`--path:.`**, and **`--nimcache:./nimcache`** unless you explicitly override them in `crown.json`.
 
 **Name clashes:** In generated routes, Crown uses `import crown/core as crown` and qualifies `crown.Request` / `crown.Response` so they do not collide with Basolato’s `request` / `response` modules. The `crownRouteRegister` template uses exported aliases `BasolatoContext`, `BasolatoParams`, and `BasolatoHttpResponse` internally so expansion stays unambiguous with `import basolato/controller`.
 
@@ -261,8 +261,8 @@ You can extend the Nim compiler flags used by both `crown build` and `crown dev`
 
 `nim.flags`, `nim.buildFlags`, `nim.devFlags`, `watch.dirs`, and `watch.files` are also accepted as nested forms. The dev server now inherits the full parent environment and overrides only `PORT` and `ENV`, so secrets like `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN` continue to be available in the child process.
 
-By default, Crown now compiles with `-d:httpbeast` (Basolato's `httpbeast` backend).  
-If you want to switch backend explicitly, set a backend define/undef flag in `nimFlags`, `buildFlags`, or `devFlags` (for example `"-u:httpbeast", "-d:httpx"`).
+By default, Crown now compiles with `-d:httpbeast` (Basolato's `httpbeast` backend), `-d:ssl`, `--path:.`, and `--nimcache:./nimcache`.
+If you want to switch backend or disable SSL explicitly, set define/undef flags in `nimFlags`, `buildFlags`, or `devFlags` (for example `"-u:httpbeast", "-d:httpx"` or `"-u:ssl"`). A custom `--nimcache:...` flag disables Crown's default nimcache path.
 
 ## 🤝 Contributing
 

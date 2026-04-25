@@ -33,6 +33,29 @@ proc hasServerBackendFlag(flags: openArray[string]): bool =
     ]:
       return true
 
+proc hasDefineOrUndefFlag(flags: openArray[string], symbol: string): bool =
+  for value in flags:
+    let normalized = value.strip()
+    if normalized in [
+      "-d:" & symbol,
+      "--define:" & symbol,
+      "-u:" & symbol,
+      "--undef:" & symbol
+    ]:
+      return true
+
+proc hasCurrentDirPathFlag(flags: openArray[string]): bool =
+  for value in flags:
+    let normalized = value.strip().replace("\"", "")
+    if normalized in ["--path:.", "--path=.", "--path:./", "--path=./"]:
+      return true
+
+proc hasNimCacheFlag(flags: openArray[string]): bool =
+  for value in flags:
+    let normalized = value.strip()
+    if normalized.startsWith("--nimcache"):
+      return true
+
 proc readStringSeq(node: JsonNode, key: string): seq[string] =
   if node.kind != JObject or not node.hasKey(key):
     return @[]
@@ -102,6 +125,14 @@ proc getCompileArgs*(config: CrownConfig, mode: BuildMode, mainPath: string): se
       config.devFlags
   if not hasServerBackendFlag(config.nimFlags) and not hasServerBackendFlag(modeFlags):
     addUnique(result, @["-d:httpbeast"])
+  if not hasDefineOrUndefFlag(config.nimFlags, "ssl") and
+      not hasDefineOrUndefFlag(modeFlags, "ssl"):
+    addUnique(result, @["-d:ssl"])
+  if not hasCurrentDirPathFlag(config.nimFlags) and
+      not hasCurrentDirPathFlag(modeFlags):
+    addUnique(result, @["--path:."])
+  if not hasNimCacheFlag(config.nimFlags) and not hasNimCacheFlag(modeFlags):
+    addUnique(result, @["--nimcache:./nimcache"])
   addUnique(result, config.nimFlags)
   case mode
   of bmBuild:
