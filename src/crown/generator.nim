@@ -309,7 +309,7 @@ proc getCrownConfig(): JsonNode =
       let j = parseFile("crown.json")
       if j.hasKey("tailwind"): result["tailwind"] = j["tailwind"]
       if j.hasKey("pwa"): result["pwa"] = j["pwa"]
-    except:
+    except CatchableError:
       discard
 
 proc generatePWAFiles*(publicDir: string = "public") =

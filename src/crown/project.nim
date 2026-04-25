@@ -119,7 +119,7 @@ proc loadCrownConfig*(): CrownConfig =
       let watchNode = root["watch"]
       addUnique(result.watchDirs, readStringSeq(watchNode, "dirs"))
       addUnique(result.watchFiles, readStringSeq(watchNode, "files"))
-  except:
+  except CatchableError:
     discard
 
 proc getCompileArgs*(config: CrownConfig, mode: BuildMode, mainPath: string): seq[string] =

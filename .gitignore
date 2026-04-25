@@ -34,3 +34,13 @@ Thumbs.db
 *.swo
 
 .crown/
+
+.midnote/
+
+# midnote tracked markdown
+findings.md
+next.md
+progress.md
+SPEC.md
+task_plan.md
+# end midnote tracked markdown

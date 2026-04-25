@@ -175,7 +175,7 @@ proc getCrownConfig(): JsonNode =
         result["tailwind"] = j["tailwind"]
       if j.hasKey("pwa"):
         result["pwa"] = j["pwa"]
-    except:
+    except CatchableError:
       discard
 
 proc injectCrownSystem*(content: string): string =
