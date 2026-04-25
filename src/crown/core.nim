@@ -28,6 +28,9 @@ proc getStr*(r: Request, key: string): string = r.params.getStr(key)
 proc getOrDefault*(r: Params, key: string, default: string): string = r.getStr(
     key, default)
 
+when compiles((var c: BasolatoContext; discard c.params())):
+  proc crownContextParams*(c: BasolatoContext): BasolatoParams = c.params()
+
 template crownRouteRegister*(httpMethod: static string, path: static string, body: untyped): untyped {.dirty.} =
   ## Basolato 0.16: ``Controller`` is ``proc(c: Context): Future[Response]`` with ``Context.params``.
   ## Basolato 0.15: ``proc(c: Context, p: Params): Future[Response]``.
@@ -41,9 +44,11 @@ template crownRouteRegister*(httpMethod: static string, path: static string, bod
   ## ``when compiles`` uses ``BasolatoContext`` (exported from this module) so expansion sites never
   ## pick Basolato’s ``context.Context`` by mistake.
   when httpMethod == "get":
-    when compiles((var c: BasolatoContext; discard c.params())):
+    when compiles(Route.get(path, proc(c: BasolatoContext): Future[BasolatoHttpResponse] {.async, closure.} =
+      discard c
+    )):
       Route.get(path, proc(c: BasolatoContext): Future[BasolatoHttpResponse] {.async, closure.} =
-        let p = c.params()
+        let p = crownContextParams(c)
         body
       )
     else:
@@ -51,9 +56,11 @@ template crownRouteRegister*(httpMethod: static string, path: static string, bod
         body
       )
   elif httpMethod == "post":
-    when compiles((var c: BasolatoContext; discard c.params())):
+    when compiles(Route.post(path, proc(c: BasolatoContext): Future[BasolatoHttpResponse] {.async, closure.} =
+      discard c
+    )):
       Route.post(path, proc(c: BasolatoContext): Future[BasolatoHttpResponse] {.async, closure.} =
-        let p = c.params()
+        let p = crownContextParams(c)
         body
       )
     else:
@@ -61,9 +68,11 @@ template crownRouteRegister*(httpMethod: static string, path: static string, bod
         body
       )
   elif httpMethod == "put":
-    when compiles((var c: BasolatoContext; discard c.params())):
+    when compiles(Route.put(path, proc(c: BasolatoContext): Future[BasolatoHttpResponse] {.async, closure.} =
+      discard c
+    )):
       Route.put(path, proc(c: BasolatoContext): Future[BasolatoHttpResponse] {.async, closure.} =
-        let p = c.params()
+        let p = crownContextParams(c)
         body
       )
     else:
@@ -71,9 +80,11 @@ template crownRouteRegister*(httpMethod: static string, path: static string, bod
         body
       )
   elif httpMethod == "patch":
-    when compiles((var c: BasolatoContext; discard c.params())):
+    when compiles(Route.patch(path, proc(c: BasolatoContext): Future[BasolatoHttpResponse] {.async, closure.} =
+      discard c
+    )):
       Route.patch(path, proc(c: BasolatoContext): Future[BasolatoHttpResponse] {.async, closure.} =
-        let p = c.params()
+        let p = crownContextParams(c)
         body
       )
     else:
@@ -81,9 +92,11 @@ template crownRouteRegister*(httpMethod: static string, path: static string, bod
         body
       )
   elif httpMethod == "delete":
-    when compiles((var c: BasolatoContext; discard c.params())):
+    when compiles(Route.delete(path, proc(c: BasolatoContext): Future[BasolatoHttpResponse] {.async, closure.} =
+      discard c
+    )):
       Route.delete(path, proc(c: BasolatoContext): Future[BasolatoHttpResponse] {.async, closure.} =
-        let p = c.params()
+        let p = crownContextParams(c)
         body
       )
     else:

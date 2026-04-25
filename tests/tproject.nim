@@ -19,6 +19,21 @@ suite "Project compiler config":
     check "--path:." in args
     check "--nimcache:./nimcache" in args
 
+  test "getCompileArgs prefers the running Crown package path":
+    let config = CrownConfig(
+      port: "5000",
+      nimFlags: @[],
+      buildFlags: @[],
+      devFlags: @[],
+      watchDirs: @[],
+      watchFiles: @[]
+    )
+
+    let args = getCompileArgs(config, bmBuild, ".crown/main.nim")
+
+    check args[1] == "--path:" & getCrownPackagePath()
+    check args.find("--path:.") > args.find("--path:" & getCrownPackagePath())
+
   test "user flags can override Crown default compiler flags":
     let config = CrownConfig(
       port: "5000",

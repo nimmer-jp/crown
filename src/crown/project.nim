@@ -12,6 +12,12 @@ type
     watchDirs*: seq[string]
     watchFiles*: seq[string]
 
+const crownProjectSourcePath = currentSourcePath()
+
+proc getCrownPackagePath*(): string =
+  ## Path Nim should use to import the same Crown package as this CLI binary.
+  crownProjectSourcePath.parentDir().parentDir()
+
 proc addUnique(dest: var seq[string], values: openArray[string]) =
   for value in values:
     let normalized = value.strip()
@@ -118,6 +124,7 @@ proc loadCrownConfig*(): CrownConfig =
 
 proc getCompileArgs*(config: CrownConfig, mode: BuildMode, mainPath: string): seq[string] =
   result = @["c"]
+  addUnique(result, @["--path:" & getCrownPackagePath()])
   let modeFlags = case mode
     of bmBuild:
       config.buildFlags
