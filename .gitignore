@@ -38,6 +38,7 @@ Thumbs.db
 .midnote/
 
 # midnote tracked markdown
+CHANGELOG.md
 findings.md
 next.md
 progress.md
