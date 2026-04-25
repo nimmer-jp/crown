@@ -287,7 +287,7 @@ proc generateMainCode*(routesPath: string): string =
          "    return parseInt(s)\n" &
          "  except ValueError:\n" &
          "    return defaultPort\n\n" &
-         "when compiles(Settings.new(port: 5000)):\n" &
+         "when compiles(Settings.new(port = 5000)):\n" &
          "  let port = crownParsePortEnv(5000)\n" &
          "  let hostRaw = getEnv(\"HOST\", \"0.0.0.0\").strip()\n" &
          "  let host = if hostRaw.len > 0: hostRaw else: \"0.0.0.0\"\n" &

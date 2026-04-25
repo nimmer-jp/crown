@@ -46,7 +46,7 @@ suite "Generator tests":
   test "generateMainCode uses Settings when available else serve(routes) only (0.15 compat)":
     let mainCode = generateMainCode("routes.nim")
     check "import std/[os, strutils]" in mainCode
-    check "when compiles(Settings.new(port: 5000)):" in mainCode
+    check "when compiles(Settings.new(port = 5000)):" in mainCode
     check mainCode.contains("serve(@[routes.routes], settings)")
     check mainCode.contains("serve(routes.routes, settings)")
     check mainCode.contains("when compiles(Routes.merge(@[])):")

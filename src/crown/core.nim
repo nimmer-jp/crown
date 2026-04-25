@@ -42,52 +42,52 @@ template crownRouteRegister*(httpMethod: static string, path: static string, bod
   ## pick Basolato’s ``context.Context`` by mistake.
   when httpMethod == "get":
     when compiles((var c: BasolatoContext; discard c.params())):
-      Route.get(path, proc(c: BasolatoContext): Future[BasolatoHttpResponse] {.async.} =
+      Route.get(path, proc(c: BasolatoContext): Future[BasolatoHttpResponse] {.async, closure.} =
         let p = c.params()
         body
       )
     else:
-      Route.get(path, proc(c: BasolatoContext, p: BasolatoParams): Future[BasolatoHttpResponse] {.async.} =
+      Route.get(path, proc(c: BasolatoContext, p: BasolatoParams): Future[BasolatoHttpResponse] {.async, closure.} =
         body
       )
   elif httpMethod == "post":
     when compiles((var c: BasolatoContext; discard c.params())):
-      Route.post(path, proc(c: BasolatoContext): Future[BasolatoHttpResponse] {.async.} =
+      Route.post(path, proc(c: BasolatoContext): Future[BasolatoHttpResponse] {.async, closure.} =
         let p = c.params()
         body
       )
     else:
-      Route.post(path, proc(c: BasolatoContext, p: BasolatoParams): Future[BasolatoHttpResponse] {.async.} =
+      Route.post(path, proc(c: BasolatoContext, p: BasolatoParams): Future[BasolatoHttpResponse] {.async, closure.} =
         body
       )
   elif httpMethod == "put":
     when compiles((var c: BasolatoContext; discard c.params())):
-      Route.put(path, proc(c: BasolatoContext): Future[BasolatoHttpResponse] {.async.} =
+      Route.put(path, proc(c: BasolatoContext): Future[BasolatoHttpResponse] {.async, closure.} =
         let p = c.params()
         body
       )
     else:
-      Route.put(path, proc(c: BasolatoContext, p: BasolatoParams): Future[BasolatoHttpResponse] {.async.} =
+      Route.put(path, proc(c: BasolatoContext, p: BasolatoParams): Future[BasolatoHttpResponse] {.async, closure.} =
         body
       )
   elif httpMethod == "patch":
     when compiles((var c: BasolatoContext; discard c.params())):
-      Route.patch(path, proc(c: BasolatoContext): Future[BasolatoHttpResponse] {.async.} =
+      Route.patch(path, proc(c: BasolatoContext): Future[BasolatoHttpResponse] {.async, closure.} =
         let p = c.params()
         body
       )
     else:
-      Route.patch(path, proc(c: BasolatoContext, p: BasolatoParams): Future[BasolatoHttpResponse] {.async.} =
+      Route.patch(path, proc(c: BasolatoContext, p: BasolatoParams): Future[BasolatoHttpResponse] {.async, closure.} =
         body
       )
   elif httpMethod == "delete":
     when compiles((var c: BasolatoContext; discard c.params())):
-      Route.delete(path, proc(c: BasolatoContext): Future[BasolatoHttpResponse] {.async.} =
+      Route.delete(path, proc(c: BasolatoContext): Future[BasolatoHttpResponse] {.async, closure.} =
         let p = c.params()
         body
       )
     else:
-      Route.delete(path, proc(c: BasolatoContext, p: BasolatoParams): Future[BasolatoHttpResponse] {.async.} =
+      Route.delete(path, proc(c: BasolatoContext, p: BasolatoParams): Future[BasolatoHttpResponse] {.async, closure.} =
         body
       )
   else:
