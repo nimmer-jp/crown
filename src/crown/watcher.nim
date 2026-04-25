@@ -26,7 +26,7 @@ proc snapshotWatchedFiles(appDir, outDir: string): Table[string, Time] =
         continue
       try:
         result[normalizeWatchPath(path)] = getLastModificationTime(path)
-      except:
+      except CatchableError:
         discard
 
   for path in getWatchFiles(config):
@@ -34,7 +34,7 @@ proc snapshotWatchedFiles(appDir, outDir: string): Table[string, Time] =
       continue
     try:
       result[normalizeWatchPath(path)] = getLastModificationTime(path)
-    except:
+    except CatchableError:
       discard
 
 proc hasWatchChanges(previous, current: Table[string, Time]): bool =

@@ -1,4 +1,4 @@
-import std/unittest
+import std/[strutils, unittest]
 import crown/project
 
 suite "Project compiler config":
@@ -51,3 +51,22 @@ suite "Project compiler config":
     check "-u:ssl" in args
     check "--nimcache:./nimcache" notin args
     check "--nimcache:custom" in args
+
+  test "source code catches only catchable exceptions":
+    let sourceFiles = [
+      "src/crown/core.nim",
+      "src/crown/generator.nim",
+      "src/crown/project.nim",
+      "src/crown/watcher.nim"
+    ]
+    var offendingBareExcepts: seq[string] = @[]
+
+    for file in sourceFiles:
+      var lineNo = 0
+      for line in readFile(file).splitLines():
+        inc lineNo
+        if line.strip() == "except:":
+          offendingBareExcepts.add(file & ":" & $lineNo)
+
+    checkpoint offendingBareExcepts.join(", ")
+    check offendingBareExcepts.len == 0
