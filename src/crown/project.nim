@@ -1,4 +1,4 @@
-import std/[json, os, osproc, strtabs, strutils]
+import std/[algorithm, json, os, osproc, strtabs, strutils]
 
 type
   BuildMode* = enum
@@ -12,11 +12,39 @@ type
     watchDirs*: seq[string]
     watchFiles*: seq[string]
 
-const crownProjectSourcePath = currentSourcePath()
+const
+  crownProjectSourcePath = currentSourcePath()
+  basolatoVersion = "0.15.0"
 
 proc getCrownPackagePath*(): string =
   ## Path Nim should use to import the same Crown package as this CLI binary.
   crownProjectSourcePath.parentDir().parentDir()
+
+proc getNimbleDir*(): string =
+  let configured = getEnv("NIMBLE_DIR").strip()
+  if configured.len > 0:
+    return configured
+  getHomeDir() / ".nimble"
+
+proc getBasolatoPackagePath*(nimbleDir = getNimbleDir()): string =
+  ## Pin Basolato imports to Crown's supported version even when newer versions
+  ## are also installed in Nimble's global package cache.
+  let pkgs2Dir = nimbleDir / "pkgs2"
+  if not dirExists(pkgs2Dir):
+    return ""
+
+  let prefix = "basolato-" & basolatoVersion & "-"
+  var candidates: seq[string] = @[]
+  for kind, path in walkDir(pkgs2Dir):
+    if kind == pcDir and path.extractFilename().startsWith(prefix) and
+        fileExists(path / "basolato.nimble"):
+      candidates.add(path)
+
+  if candidates.len == 0:
+    return ""
+
+  candidates.sort()
+  candidates[0]
 
 proc addUnique(dest: var seq[string], values: openArray[string]) =
   for value in values:
@@ -122,9 +150,13 @@ proc loadCrownConfig*(): CrownConfig =
   except CatchableError:
     discard
 
-proc getCompileArgs*(config: CrownConfig, mode: BuildMode, mainPath: string): seq[string] =
+proc getCompileArgs*(config: CrownConfig, mode: BuildMode, mainPath: string,
+    nimbleDir = getNimbleDir()): seq[string] =
   result = @["c"]
   addUnique(result, @["--path:" & getCrownPackagePath()])
+  let basolatoPath = getBasolatoPackagePath(nimbleDir)
+  if basolatoPath.len > 0:
+    addUnique(result, @["--path:" & basolatoPath])
   let modeFlags = case mode
     of bmBuild:
       config.buildFlags
@@ -159,6 +191,12 @@ proc buildProcessEnv*(overrides: openArray[(string, string)]): StringTableRef =
 
 proc runNimCompile*(config: CrownConfig, mode: BuildMode, mainPath: string,
     overrides: openArray[(string, string)]): int =
+  if getBasolatoPackagePath().len == 0:
+    echo "❌ Crown requires Basolato " & basolatoVersion &
+        ". Install it with: nimble install https://github.com/itsumura-h/nim-basolato#" &
+        basolatoVersion
+    return 1
+
   let process = startProcess("nim",
     args = getCompileArgs(config, mode, mainPath),
     env = buildProcessEnv(overrides),

@@ -1,4 +1,4 @@
-import std/[strutils, unittest]
+import std/[os, strutils, unittest]
 import crown/project
 
 suite "Project compiler config":
@@ -33,6 +33,33 @@ suite "Project compiler config":
 
     check args[1] == "--path:" & getCrownPackagePath()
     check args.find("--path:.") > args.find("--path:" & getCrownPackagePath())
+
+  test "getCompileArgs pins Basolato 0.15.0 package path when installed":
+    let tempDir = getTempDir() / ("crown-basolato-" & $getCurrentProcessId())
+    if dirExists(tempDir):
+      removeDir(tempDir)
+    createDir(tempDir)
+    defer: removeDir(tempDir)
+    let basolatoPath = tempDir / "pkgs2" / "basolato-0.15.0-test"
+    createDir(basolatoPath)
+    writeFile(basolatoPath / "basolato.nimble", "version = \"0.15.0\"\n")
+    let newerBasolatoPath = tempDir / "pkgs2" / "basolato-0.16.1-test"
+    createDir(newerBasolatoPath)
+    writeFile(newerBasolatoPath / "basolato.nimble", "version = \"0.16.1\"\n")
+    let config = CrownConfig(
+      port: "5000",
+      nimFlags: @[],
+      buildFlags: @[],
+      devFlags: @[],
+      watchDirs: @[],
+      watchFiles: @[]
+    )
+
+    let args = getCompileArgs(config, bmDev, ".crown/main.nim", tempDir)
+
+    check "--path:" & basolatoPath in args
+    check "--path:" & newerBasolatoPath notin args
+    check args.find("--path:" & basolatoPath) < args.find("--path:.")
 
   test "user flags can override Crown default compiler flags":
     let config = CrownConfig(
