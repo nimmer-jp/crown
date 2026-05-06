@@ -239,6 +239,7 @@ Crown supports **Basolato 0.15.0 through 0.16.x** and **Nim 2.2.x** (Nim ≥ 2.0
 Crown comes with a powerful CLI to manage your project lifecycle.
 
 - `crown init` — Scaffolds a new barebones project structure natively.
+- `crown create-app [dir]` — Scaffolds a Crown + Tiara starter (Tiara `html` page, same dependencies as `init`). Omit `dir` to use the current directory, or pass a folder name to create the project inside it.
 - `crown dev` — Boots the development server. It watches your `src/` directory and auto-recompiles routes dynamically.
 - `crown build` — Compiles your application into a highly optimized, production-ready static binary inside the `.crown` directory (`.crown/main`).
 
