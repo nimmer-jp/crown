@@ -221,7 +221,7 @@ Crown provides a centralized layout system in `src/app/layout/`.
 
 ## 🔗 Basolato and Nim versions
 
-Crown supports **Basolato 0.15.0 through 0.16.x** and **Nim 2.2.x** (Nim ≥ 2.0 is required by `crown.nimble`).
+Crown supports **Basolato 0.15.0 through 0.16.x** and **Nim 2.2.x** (`crown.nimble` requires Nim ≥ 2.2.0). For the current stable patch line, **Nim 2.2.10** or newer is recommended ([release notes](https://nim-lang.org/blog/2026/04/24/nim-2210.html)).
 
 | Basolato | Controller shape | Notes |
 |----------|------------------|--------|
