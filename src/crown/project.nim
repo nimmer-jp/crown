@@ -15,6 +15,7 @@ type
 const
   crownProjectSourcePath = currentSourcePath()
   basolatoVersion = "0.15.0"
+  basolatoGitRef = "v0.15.0" ## Upstream tag (`v` prefix); Nimble URL fragment
 
 proc getCrownPackagePath*(): string =
   ## Path Nim should use to import the same Crown package as this CLI binary.
@@ -194,7 +195,7 @@ proc runNimCompile*(config: CrownConfig, mode: BuildMode, mainPath: string,
   if getBasolatoPackagePath().len == 0:
     echo "❌ Crown requires Basolato " & basolatoVersion &
         ". Install it with: nimble install https://github.com/itsumura-h/nim-basolato#" &
-        basolatoVersion
+        basolatoGitRef
     return 1
 
   let process = startProcess("nim",

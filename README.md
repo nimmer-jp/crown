@@ -232,7 +232,7 @@ Crown supports **Basolato 0.15.0 through 0.16.x** and **Nim 2.2.x** (`crown.nimb
 
 **Name clashes:** In generated routes, Crown uses `import crown/core as crown` and qualifies `crown.Request` / `crown.Response` so they do not collide with Basolato’s `request` / `response` modules. The `crownRouteRegister` template uses exported aliases `BasolatoContext`, `BasolatoParams`, and `BasolatoHttpResponse` internally so expansion stays unambiguous with `import basolato/controller`.
 
-**Issue repro (Basolato 0.15 + Nim 2.2):** Pin `basolato@0.15.0` in your app or `nimble`, use Nim 2.2.x from `PATH` (not a broken Nimble-cached copy), set `SECRET_KEY` before Basolato loads (see `tests/crown_test_env.nim`), add `-d:httpbeast` as in `tests/config.nims`, then `nimble test` from the Crown repo or `nim c -r -d:httpbeast tests/tcrown_route_register.nim`.
+**Issue repro (Basolato 0.15 + Nim 2.2):** Pin Basolato with `nimble install https://github.com/itsumura-h/nim-basolato#v0.15.0` (the Git tag is **`v0.15.0`**, not `0.15.0`), use Nim 2.2.x from `PATH` (not a broken Nimble-cached copy), set `SECRET_KEY` before Basolato loads (see `tests/crown_test_env.nim`), add `-d:httpbeast` as in `tests/config.nims`, then `nimble test` from the Crown repo or `nim c -r -d:httpbeast tests/tcrown_route_register.nim`.
 
 ## 🛠 Command Line Interface
 
