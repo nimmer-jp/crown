@@ -143,6 +143,12 @@ export baco.getStr
 export basolatoResponse.body
 import tiara
 export tiara.Html
+
+proc crownTiaraHtmlToString*(html: Html): string {.inline.} =
+  ## Tiara embeds markup in ``distinct string``; generated routes import ``crown`` but not always ``tiara``,
+  ## so stringify here for Basolato ``htmlResponse``.
+  `$`(html)
+
 when declared(templates.tmpli):
   export templates.tmpli
 

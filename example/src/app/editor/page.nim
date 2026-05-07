@@ -1,13 +1,13 @@
 import crown/core
 import tiara
 
-proc post*(req: Request): string =
+proc post*(req: Request): Html =
   let content = req.postParams.getOrDefault("content", "")
   return html"""
     {Tiara.toast(message="保存しました！ (入力内容: " & content & ")")}
   """
 
-proc page*(req: Request): string =
+proc page*(req: Request): Html =
   let initialContent = "Hello, Crown Framework! 👑"
   return html"""
     <div class="max-w-3xl mx-auto space-y-12 py-8">

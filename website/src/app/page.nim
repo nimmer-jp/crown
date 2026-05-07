@@ -1,7 +1,7 @@
 import crown/core
 import tiara
 
-proc page*(req: Request): string =
+proc page*(req: Request): Html =
   return html"""
     <div class="space-y-24">
       <!-- Hero Section -->
