@@ -47,18 +47,20 @@ proc scaffoldCrownProject(root: string, useTiaraPage: bool) =
 
   let nimblePath = root / "crown.nimble"
   if not fileExists(nimblePath):
-    let nimbleContent =
-      """
-      version       = "0.1.0"
-      author        = "Crown User"
-      description   = "A new Crown application"
-      license       = "MIT"
-      srcDir        = "src"
+    let nimbleContent = """
+version       = "0.1.0"
+author        = "Crown User"
+description   = "A new Crown application"
+license       = "MIT"
+srcDir        = "src"
 
-      requires "nim >= 2.2.10"
-      requires "https://github.com/itsumura-h/nim-basolato#v0.15.0"
-      requires "https://github.com/nimmer-jp/tiara >= 0.1.0"
-      """
+requires "nim >= 2.2.10"
+requires "https://github.com/itsumura-h/nim-basolato#v0.15.0"
+requires "https://github.com/nimmer-jp/tiara >= 0.1.0"
+
+before install:
+  exec nimbleExe & " install -y https://github.com/itsumura-h/nim-basolato#v0.15.0"
+"""
     writeFile(nimblePath, nimbleContent)
 
 proc init*() =
@@ -96,6 +98,7 @@ proc build*(appDir = "src/app", outDir = ".crown") =
     quit(1)
 
   createDir(outDir)
+  writeCrownEnvPreserver(outDir)
   generatePWAFiles()
   let routesCode = generateRoutesCode(appDir)
   let routesPath = outDir / "routes.nim"

@@ -1,6 +1,6 @@
 # Package
 
-version       = "0.5.5"
+version       = "0.5.6"
 author        = "pianopia"
 description   = "Next generation meta-framework for Nim, powered by Basolato and HTMX"
 license       = "MIT"
@@ -16,7 +16,11 @@ requires "https://github.com/itsumura-h/nim-basolato#v0.15.0"
 requires "cligen"
 requires "tiara >= 0.1.0"
 
-# Default `nimble test` may invoke a broken Nim copy from Nimble’s package cache on some setups
+# Prefetch Basolato v0.15.0; Crown resolves imports to it (other Basolato versions stay on disk).
+before install:
+  exec nimbleExe & " install -y https://github.com/itsumura-h/nim-basolato#v0.15.0"
+
+# Default `nimble test` may invoke a broken Nim copy from Nimble's package cache on some setups
 # (internal error: system module needs: raiseIndexError2). This task runs tests with `nim` from PATH.
 task test, "Run unit tests":
   exec "nim c -r -d:httpbeast tests/tcrown_route_register.nim"

@@ -97,6 +97,7 @@ proc hasWatchChanges(previous, current: Table[string, Time]): bool =
 proc buildAndRunServer*(appDir, outDir, mainPath: string): Process =
   styledEcho fgYellow, "\n👑 Rebuilding Crown App..."
   createDir(outDir)
+  writeCrownEnvPreserver(outDir)
 
   # Generate PWA Files
   generatePWAFiles()

@@ -47,6 +47,74 @@ proc getBasolatoPackagePath*(nimbleDir = getNimbleDir()): string =
   candidates.sort()
   candidates[0]
 
+proc nonPinnedBasolatoInstallRoots*(nimbleDir = getNimbleDir()): seq[string] =
+  ## Nimble dirs for Basolato builds whose version differs from Crown's pinned
+  ## ``basolatoVersion``. Used with Nim ``--excludePath`` so imports resolve to
+  ## 0.15 even when 0.16+ is installed beside it.
+  result = @[]
+  let pinnedPrefix = "basolato-" & basolatoVersion & "-"
+  for sub in @["pkgs2", "pkgs"]:
+    let root = nimbleDir / sub
+    if not dirExists(root):
+      continue
+    for kind, path in walkDir(root):
+      if kind != pcDir:
+        continue
+      let name = path.extractFilename()
+      if not name.startsWith("basolato-"):
+        continue
+      if name.startsWith(pinnedPrefix):
+        continue
+      if not fileExists(path / "basolato.nimble"):
+        continue
+      result.add(path)
+  result.sort()
+
+proc basolatoNimbleGitUrl*(): string =
+  ## URL Nimble installs from to obtain ``basolatoVersion``.
+  result = "https://github.com/itsumura-h/nim-basolato#" & basolatoGitRef
+
+proc ensureBasolatoPinnedForCrown*(nimbleDir = getNimbleDir()): bool =
+  ## Ensures Nimble pkgs contain Basolato ``basolatoVersion``.
+  ##
+  ## If only a newer Basolato (for example 0.16+) is installed, runs
+  ## ``nimble install -y`` for ``basolatoGitRef`` once so Crown compiles
+  ## against the pinned tree (both versions may coexist).
+  ##
+  ## Set ``CROWN_NO_AUTO_BASELATO=1`` (or ``true``, ``yes``, ``on``) to skip auto-install.
+  if getBasolatoPackagePath(nimbleDir).len > 0:
+    return true
+  let skip = strip(getEnv("CROWN_NO_AUTO_BASELATO", ""))
+  if skip in ["1", "true", "yes", "on"]:
+    echo "❌ Crown requires Basolato " & basolatoVersion &
+        ", but it is not installed under: " & nimbleDir
+    echo "   Run: nimble install " & basolatoNimbleGitUrl()
+    echo "   (Unset CROWN_NO_AUTO_BASELATO to allow Crown to install Basolato automatically.)"
+    return false
+  let nimbleBin = strip(findExe("nimble"))
+  if nimbleBin.len == 0:
+    echo "❌ `nimble` not found on PATH; cannot install Basolato " & basolatoVersion &
+        " automatically."
+    echo "   Run: nimble install " & basolatoNimbleGitUrl()
+    return false
+  echo "📦 Installing Basolato ", basolatoVersion,
+      " under Nimble (Crown pinned build; newer Basolato can remain installed)."
+  let installArgs = @[ "install", basolatoNimbleGitUrl(), "-y",
+      "--nimbleDir:" & nimbleDir ]
+  let p =
+    startProcess(nimbleBin, args = installArgs, options = {poUsePath, poParentStreams})
+  let code = waitForExit(p)
+  close(p)
+  if code != 0:
+    echo "❌ `nimble install` failed with exit code ", code, "."
+    echo "   Retry manually: nimble install " & basolatoNimbleGitUrl()
+    return false
+  if getBasolatoPackagePath(nimbleDir).len == 0:
+    echo "❌ Basolato ", basolatoVersion, " missing after install. Expected under: ",
+        nimbleDir / "pkgs2"
+    return false
+  result = true
+
 proc addUnique(dest: var seq[string], values: openArray[string]) =
   for value in values:
     let normalized = value.strip()
@@ -158,6 +226,7 @@ proc getCompileArgs*(config: CrownConfig, mode: BuildMode, mainPath: string,
   let basolatoPath = getBasolatoPackagePath(nimbleDir)
   if basolatoPath.len > 0:
     addUnique(result, @["--path:" & basolatoPath])
+  let excludeBas = nonPinnedBasolatoInstallRoots(nimbleDir)
   let modeFlags = case mode
     of bmBuild:
       config.buildFlags
@@ -181,6 +250,9 @@ proc getCompileArgs*(config: CrownConfig, mode: BuildMode, mainPath: string,
   of bmDev:
     addUnique(result, @["--hints:off"])
     addUnique(result, config.devFlags)
+  for alien in excludeBas:
+    if alien.len > 0:
+      addUnique(result, @["--excludePath:" & absolutePath(alien)])
   result.add(mainPath)
 
 proc buildProcessEnv*(overrides: openArray[(string, string)]): StringTableRef =
@@ -193,10 +265,8 @@ proc buildProcessEnv*(overrides: openArray[(string, string)]): StringTableRef =
 proc runNimCompile*(config: CrownConfig, mode: BuildMode, mainPath: string,
     overrides: openArray[(string, string)]): int =
   if getBasolatoPackagePath().len == 0:
-    echo "❌ Crown requires Basolato " & basolatoVersion &
-        ". Install it with: nimble install https://github.com/itsumura-h/nim-basolato#" &
-        basolatoGitRef
-    return 1
+    if not ensureBasolatoPinnedForCrown():
+      return 1
 
   let process = startProcess("nim",
     args = getCompileArgs(config, mode, mainPath),
