@@ -18,15 +18,17 @@ RUN strip .crown/main
 # Ensure public directory exists
 RUN mkdir -p public
 
-# Prepare runtime dependencies (PCRE)
-FROM alpine:3.21 AS runtime-libs
-RUN apk add --no-cache pcre
-
-# Minimal scratch image
-FROM scratch
+# Nim + Basolato with `-d:ssl` (Crown defaults) produces a dynamically linked ELF that
+# expects musl libc, libpcre, OpenSSL (for TLS/session crypto), libgcc stack helpers, etc.
+# A scratch image ships only libc + PCRE, so `/app/main` exits before bind — Cloud Run then
+# reports PORT timeout. Alpine matches the Nim image libc and installs the loader + deps.
+FROM alpine:3.21
 WORKDIR /app
-COPY --from=runtime-libs /lib/ld-musl-x86_64.so.1 /lib/ld-musl-x86_64.so.1
-COPY --from=runtime-libs /usr/lib/libpcre.so.1* /usr/lib/
+RUN apk add --no-cache \
+    libgcc \
+    pcre \
+    openssl \
+    ca-certificates
 COPY --from=build /app/website/.crown/main /app/main
 COPY --from=build /app/website/.env /app/.env
 COPY --from=build /app/website/public /app/public

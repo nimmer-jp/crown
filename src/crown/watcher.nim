@@ -1,6 +1,55 @@
-import std/[os, times, osproc, tables, terminal, strutils]
+import std/[net, os, times, osproc, tables, terminal, strutils]
 import generator
 import project
+
+const tcpPortMax = 65535
+
+proc watcherListenHostRaw(): string =
+  ## Same default as Crown-generated ``main``: empty ``HOST`` means all interfaces.
+  let h = getEnv("HOST", "").strip()
+  if h.len > 0:
+    return h
+  return "0.0.0.0"
+
+proc parsePreferredPort(pref: string): int =
+  try:
+    let p = parseInt(pref.strip())
+    if p >= 1 and p <= tcpPortMax:
+      return p
+  except CatchableError:
+    discard
+  return 5000
+
+proc tcpPortFree(host: string, port: Port): bool =
+  var sock = newSocket()
+  try:
+    sock.setSockOpt(OptReuseAddr, true)
+    sock.bindAddr(port, host)
+    return true
+  except CatchableError:
+    return false
+  finally:
+    sock.close()
+
+proc pickListeningPort(cfgPort: string; maxAttempts = 512): string =
+  ## Prefer ``cfgPort``, then successive ports until a TCP bind succeeds (avoids
+  ## Basolato "address already in use" on crowded dev machines).
+  let host = watcherListenHostRaw()
+  var startPort = parsePreferredPort(cfgPort)
+  var i = 0
+  while i < maxAttempts:
+    let cand = startPort + i
+    if cand > tcpPortMax:
+      break
+    if tcpPortFree(host, Port(cand)):
+      if i > 0:
+        styledEcho fgYellow, "⚠️ Port ", $startPort, " is already in use; listening on ",
+            $cand, " instead."
+      return $cand
+    inc i
+  styledEcho fgRed, "❌ No free TCP port found starting at ", $startPort,
+      " (tried up to ", $maxAttempts, " increments)."
+  quit(1)
 
 proc normalizeWatchPath(path: string): string =
   path.replace('\\', '/')
@@ -60,7 +109,7 @@ proc buildAndRunServer*(appDir, outDir, mainPath: string): Process =
   writeFile(mainPath, mainCode)
 
   let config = loadCrownConfig()
-  let port = config.port
+  let port = pickListeningPort(config.port)
   # Ensure PORT is passed correctly to compiler & runtime
   let compRes = runNimCompile(config, bmDev, mainPath, [("PORT", port)])
   if compRes != 0:
