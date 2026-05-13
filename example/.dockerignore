@@ -1,0 +1,9 @@
+# Build context: Crown アプリのディレクトリ（この example/）をルートにすること。
+.git
+.gitignore
+nimcache
+nimcache_*
+.nimble
+.crown
+*.md
+cloudrun
