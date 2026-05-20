@@ -18,7 +18,7 @@ proc parsePreferredPort(pref: string): int =
       return p
   except CatchableError:
     discard
-  return 5000
+  return 8080
 
 proc tcpPortFree(host: string, port: Port): bool =
   var sock = newSocket()
@@ -106,11 +106,11 @@ proc buildAndRunServer*(appDir, outDir, mainPath: string): Process =
   let routesCode = generateRoutesCode(appDir, isDev = true)
   writeFile(outDir / "routes.nim", routesCode)
 
-  let mainCode = generateMainCode("routes.nim")
-  writeFile(mainPath, mainCode)
-
   let config = loadCrownConfig()
   let port = pickListeningPort(config.port)
+  let mainCode = generateMainCode("routes.nim", parseInt(port))
+  writeFile(mainPath, mainCode)
+
   # Ensure PORT is passed correctly to compiler & runtime
   let compRes = runNimCompile(config, bmDev, mainPath, [("PORT", port)])
   if compRes != 0:

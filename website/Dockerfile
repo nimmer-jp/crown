@@ -12,6 +12,7 @@ WORKDIR /app/website
 
 # Install website dependencies and build the app
 RUN nimble install -y
+ENV PORT=8080
 RUN crown build
 RUN strip .crown/main
 
@@ -34,5 +35,10 @@ COPY --from=build /app/website/.env /app/.env
 COPY --from=build /app/website/public /app/public
 
 EXPOSE 8080
+ENV HOST=0.0.0.0
 ENV PORT=8080
+# Basolato: avoid writing logs under /app/logs as non-root (permission errors → 503).
+ENV LOG_IS_FILE=false
+ENV LOG_IS_ERROR_FILE=false
+
 CMD ["/app/main"]

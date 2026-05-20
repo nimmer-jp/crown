@@ -7,9 +7,11 @@ when not (defined(httpbeast) or defined(httpx)):
 
 import basolato/controller as baco except html
 import basolato/core/response as basolatoResponse
+import basolato/core/security/cookie as basCookie
 import basolato/core/templates
 
 export strformat, httpcore, asyncdispatch, json, os, strutils
+export basCookie.Cookie, basCookie.Cookies, basCookie.timeForward
 
 type
   Context* = baco.Context
@@ -27,6 +29,32 @@ type
 proc getStr*(r: Request, key: string): string = r.params.getStr(key)
 proc getOrDefault*(r: Params, key: string, default: string): string = r.getStr(
     key, default)
+
+proc queryParam*(r: Request, key: string, default = ""): string =
+  ## Merges Basolato ``Params`` query and form shape into one helper (same as ``getStr`` with default).
+  r.params.getStr(key, default)
+
+proc redirect*(url: string): Response {.inline.} =
+  ## HTTP 303 redirect (Basolato-compatible).
+  basolatoResponse.redirect(url)
+
+proc errorRedirect*(url: string): Response {.inline.} =
+  ## HTTP 302 redirect.
+  basolatoResponse.errorRedirect(url)
+
+proc redirect*(url: string, status: HttpCode): Response =
+  ## Redirect with an explicit status (e.g. ``Http301``, ``Http307``).
+  var headers = newHttpHeaders(true)
+  headers["Location"] = url
+  Response.new(status, "", headers)
+
+proc cookies*(r: Request): Cookies =
+  ## Request cookies facade (Basolato ``Cookies``); avoids importing Basolato cookie module directly.
+  Cookies.new(r.context.request)
+
+proc setCookie*(response: Response, cookies: Cookies): Response =
+  ## Attach Basolato ``Cookies`` (built with ``Cookies.new`` / ``set``) to a response.
+  basolatoResponse.setCookie(response, cookies)
 
 when compiles((var c: BasolatoContext; discard c.params())):
   proc crownContextParams*(c: BasolatoContext): BasolatoParams = c.params()

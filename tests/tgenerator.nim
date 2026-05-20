@@ -43,12 +43,19 @@ suite "Generator tests":
     check prod.contains("Routes.merge(@[")
     check prod.contains("crownRoute0, crownRoute1")
 
+  test "generateMainCode prefers runtime PORT and embeds crown.json default":
+    let mainCode = generateMainCode("routes.nim", 9000)
+    check "import crown_env_preserver" in mainCode
+    check "let runtime = getEnv(\"PORT\"" in mainCode
+    check "crownParsePortEnv(9000)" in mainCode
+
   test "generateMainCode uses Settings when available else serve(routes) only (0.15 compat)":
     let mainCode = generateMainCode("routes.nim")
     check "import crown_env_preserver" in mainCode
     check mainCode.contains("crown_env_preserver.crownPortBeforeBasolatoEnv")
     check "import std/[os, strutils]" in mainCode
     check "when compiles(Settings.new(port = 5000)):" in mainCode
+    check "crownParsePortEnv(8080)" in mainCode
     check mainCode.contains("serve(@[routes.routes], settings)")
     check mainCode.contains("serve(routes.routes, settings)")
     check mainCode.contains("when compiles(Routes.merge(@[])):")

@@ -11,6 +11,8 @@ type
     devFlags*: seq[string]
     watchDirs*: seq[string]
     watchFiles*: seq[string]
+    ## Extra ``--path:`` entries for ``nim c`` (monorepos, local nimble checkouts, etc.).
+    compilerPaths*: seq[string]
 
 const
   crownProjectSourcePath = currentSourcePath()
@@ -183,12 +185,13 @@ proc readPort(node: JsonNode): string =
 
 proc loadCrownConfig*(): CrownConfig =
   result = CrownConfig(
-    port: "5000",
+    port: "8080",
     nimFlags: @[],
     buildFlags: @[],
     devFlags: @[],
     watchDirs: @[],
-    watchFiles: @[]
+    watchFiles: @[],
+    compilerPaths: @[]
   )
 
   if not fileExists("crown.json"):
@@ -205,12 +208,14 @@ proc loadCrownConfig*(): CrownConfig =
     addUnique(result.devFlags, readStringSeq(root, "devFlags"))
     addUnique(result.watchDirs, readStringSeq(root, "watchDirs"))
     addUnique(result.watchFiles, readStringSeq(root, "watchFiles"))
+    addUnique(result.compilerPaths, readStringSeq(root, "compilerPaths"))
 
     if root.kind == JObject and root.hasKey("nim") and root["nim"].kind == JObject:
       let nimNode = root["nim"]
       addUnique(result.nimFlags, readStringSeq(nimNode, "flags"))
       addUnique(result.buildFlags, readStringSeq(nimNode, "buildFlags"))
       addUnique(result.devFlags, readStringSeq(nimNode, "devFlags"))
+      addUnique(result.compilerPaths, readStringSeq(nimNode, "compilerPaths"))
 
     if root.kind == JObject and root.hasKey("watch") and root["watch"].kind == JObject:
       let watchNode = root["watch"]
@@ -226,6 +231,11 @@ proc getCompileArgs*(config: CrownConfig, mode: BuildMode, mainPath: string,
   let basolatoPath = getBasolatoPackagePath(nimbleDir)
   if basolatoPath.len > 0:
     addUnique(result, @["--path:" & basolatoPath])
+  for extra in config.compilerPaths:
+    let p = extra.strip()
+    if p.len == 0:
+      continue
+    addUnique(result, @["--path:" & absolutePath(p)])
   let excludeBas = nonPinnedBasolatoInstallRoots(nimbleDir)
   let modeFlags = case mode
     of bmBuild:

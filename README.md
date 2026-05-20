@@ -39,7 +39,7 @@ crown init
 crown dev
 ```
 
-_(Your app will be available at `http://localhost:5000/` with hot-reloading enabled!)_
+_(Your app will be available at `http://localhost:8080/` by default; hot-reloading is enabled in development.)_
 
 ## 📂 File-System Routing
 
@@ -249,9 +249,10 @@ You can extend the Nim compiler flags used by both `crown build` and `crown dev`
 
 ```json
 {
-  "port": 5000,
+  "port": 8080,
   "tailwind": true,
   "pwa": false,
+  "compilerPaths": ["./vendor/my-nim-pkg"],
   "nimFlags": ["-d:ssl"],
   "buildFlags": ["-d:release", "-d:production_db"],
   "devFlags": ["--hints:off", "-d:dev_db"],
@@ -264,6 +265,18 @@ You can extend the Nim compiler flags used by both `crown build` and `crown dev`
 
 By default, Crown now compiles with `-d:httpbeast` (Basolato's `httpbeast` backend), `-d:ssl`, `--path:.`, and `--nimcache:./nimcache`.
 If you want to switch backend or disable SSL explicitly, set define/undef flags in `nimFlags`, `buildFlags`, or `devFlags` (for example `"-u:httpbeast", "-d:httpx"` or `"-u:ssl"`). A custom `--nimcache:...` flag disables Crown's default nimcache path.
+
+## ☁️ Production builds, Cloud Run, and containers
+
+Basolato reads several environment variables very early (see upstream `baseEnv.nim`). Crown adds the following conveniences:
+
+- **`crown/dotenv` + `.crown/crown_env_preserver.nim`**: Before Basolato is imported, Crown walks upward from the process working directory to find `crown.json`, then loads `<project>/.env` and `<project>/.env.local` into `putEnv`. You can call `loadCrownDotEnv()` from application code if you need the same lookup again later.
+- **`PORT`**: Basolato **0.15** evaluates `PORT` in `baseEnv` at **compile time** when using the `httpbeast` server path. Always run production Docker builds with the same `PORT` you will inject at runtime (for example `PORT=8080 crown build`). `crown build` also passes `PORT` from your shell **over** `crown.json` when set. The generated `main` parses **`runtime `PORT` first**, then falls back to the compile-time snapshot and finally `crown.json`.
+- **Logging**: Basolato defaults to file logging under `LOG_DIR` (`./logs`). On read-only or non-root images that can raise permission errors. For Cloud Run, Fly.io, etc., set `LOG_IS_FILE=false` and `LOG_IS_ERROR_FILE=false` (see sample Dockerfiles in this repo).
+- **HTTP helpers in `crown/core`**: Use `redirect`, `errorRedirect`, `cookies(request)`, `setCookie(response, cookies)`, and `queryParam` instead of importing Basolato modules directly where possible.
+- **Optional modules**: `import crown/guards` (`withSomeOrRedirect`), `import crown/rate_limit` (in-memory fixed window + `429` helper), and extra Nim search paths via `compilerPaths` in `crown.json` (or `nim.compilerPaths`) when `crown` invokes `nim c` outside `nimble`'s own wrapper.
+
+Nested layouts (“route groups”) are not generated yet; use a shared `proc` (e.g. `adminShell`) or a dedicated layout file under `src/app/layout/` today.
 
 ## 🤝 Contributing
 

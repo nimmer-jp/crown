@@ -9,7 +9,8 @@ suite "Project compiler config":
       buildFlags: @[],
       devFlags: @[],
       watchDirs: @[],
-      watchFiles: @[]
+      watchFiles: @[],
+      compilerPaths: @[]
     )
 
     let args = getCompileArgs(config, bmDev, ".crown/main.nim")
@@ -26,13 +27,30 @@ suite "Project compiler config":
       buildFlags: @[],
       devFlags: @[],
       watchDirs: @[],
-      watchFiles: @[]
+      watchFiles: @[],
+      compilerPaths: @[]
     )
 
     let args = getCompileArgs(config, bmBuild, ".crown/main.nim")
 
     check args[1] == "--path:" & getCrownPackagePath()
     check args.find("--path:.") > args.find("--path:" & getCrownPackagePath())
+
+  test "getCompileArgs includes crown.json compilerPaths as absolute --path":
+    let tempDir = getTempDir() / ("crown-compile-extra-" & $getCurrentProcessId())
+    createDir(tempDir / "vendor" / "dummy")
+    defer: removeDir(tempDir)
+    let config = CrownConfig(
+      port: "5000",
+      nimFlags: @[],
+      buildFlags: @[],
+      devFlags: @[],
+      watchDirs: @[],
+      watchFiles: @[],
+      compilerPaths: @[tempDir / "vendor"]
+    )
+    let args = getCompileArgs(config, bmDev, ".crown/main.nim")
+    check ("--path:" & absolutePath(tempDir / "vendor")) in args
 
   test "getCompileArgs pins Basolato 0.15.0 package path when installed":
     let tempDir = getTempDir() / ("crown-basolato-" & $getCurrentProcessId())
@@ -52,7 +70,8 @@ suite "Project compiler config":
       buildFlags: @[],
       devFlags: @[],
       watchDirs: @[],
-      watchFiles: @[]
+      watchFiles: @[],
+      compilerPaths: @[]
     )
 
     let args = getCompileArgs(config, bmDev, ".crown/main.nim", tempDir)
@@ -79,7 +98,8 @@ suite "Project compiler config":
       buildFlags: @[],
       devFlags: @[],
       watchDirs: @[],
-      watchFiles: @[]
+      watchFiles: @[],
+      compilerPaths: @[]
     )
     let args = getCompileArgs(config, bmDev, ".crown/main.nim", tempDir)
     var excludes016 = 0
@@ -145,7 +165,10 @@ suite "Project compiler config":
       "src/crown/core.nim",
       "src/crown/generator.nim",
       "src/crown/project.nim",
-      "src/crown/watcher.nim"
+      "src/crown/watcher.nim",
+      "src/crown/dotenv.nim",
+      "src/crown/guards.nim",
+      "src/crown/rate_limit.nim"
     ]
     var offendingBareExcepts: seq[string] = @[]
 

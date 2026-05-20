@@ -21,7 +21,7 @@ const
     "      <p class=\"text-sm text-gray-400\">編集: <code>src/app/page.nim</code> · 起動: <code>crown dev</code></p>\n" &
     "    </div>\n" &
     "  \"\"\"\n"
-  crownJsonDefault = "{\n  \"port\": 5000,\n  \"tailwind\": true,\n  \"pwa\": false\n}\n"
+  crownJsonDefault = "{\n  \"port\": 8080,\n  \"tailwind\": true,\n  \"pwa\": false\n}\n"
 
 proc ensureDir(path: string) =
   if dirExists(path):
@@ -30,6 +30,12 @@ proc ensureDir(path: string) =
   if p.len > 0 and not dirExists(p):
     ensureDir(p)
   createDir(path)
+
+proc parseConfigPortInt(cfg: CrownConfig): int =
+  try:
+    parseInt(cfg.port.strip())
+  except ValueError:
+    8080
 
 proc scaffoldCrownProject(root: string, useTiaraPage: bool) =
   ## Create directories, optional starter page, crown.json, and crown.nimble under ``root``.
@@ -57,6 +63,9 @@ srcDir        = "src"
 requires "nim >= 2.2.10"
 requires "https://github.com/itsumura-h/nim-basolato#v0.15.0"
 requires "https://github.com/nimmer-jp/tiara >= 0.1.0"
+
+# Prefer renaming this file to myapp.nimble (or similar) so it does not share the name `crown`
+# with the framework CLI package installed via `nimble install crown`.
 """
     writeFile(nimblePath, nimbleContent)
 
@@ -101,14 +110,16 @@ proc build*(appDir = "src/app", outDir = ".crown") =
   let routesPath = outDir / "routes.nim"
   writeFile(routesPath, routesCode)
 
-  let mainCode = generateMainCode("routes.nim")
+  let config = loadCrownConfig()
+  let defaultListen = parseConfigPortInt(config)
+  let mainCode = generateMainCode("routes.nim", defaultListen)
   let mainPath = outDir / "main.nim"
   writeFile(mainPath, mainCode)
 
-  let config = loadCrownConfig()
-  let port = config.port
-  # Basolato resolves PORT during compilation, so pass it via the compiler environment.
-  let ret = runNimCompile(config, bmBuild, mainPath, [("PORT", port)])
+  let envPort = getEnv("PORT", "").strip()
+  ## Basolato 0.15 bakes ``PORT`` at compile time for httpbeast; prefer explicit ``PORT`` for the compiler when set.
+  let compilePort = if envPort.len > 0: envPort else: config.port
+  let ret = runNimCompile(config, bmBuild, mainPath, [("PORT", compilePort)])
   if ret == 0:
     styledEcho fgGreen, "✅ Build succeeded! You can run the app with ./.crown/main"
   else:
@@ -130,7 +141,7 @@ proc start*(outDir = ".crown") =
   ## Start the built Crown application for production
   styledEcho fgYellow, "👑 Starting Crown production server..."
   let binPath = outDir / "main"
-  
+
   var runPath = binPath
   if not fileExists(binPath):
     let binPathAlt = if hostOS == "windows": binPath & ".exe" else: binPath
@@ -138,10 +149,11 @@ proc start*(outDir = ".crown") =
       styledEcho fgRed, "❌ Could not find compiled binary. Please run `crown build` first."
       quit(1)
     runPath = binPathAlt
-    
+
   let config = loadCrownConfig()
-  let port = config.port
-  putEnv("PORT", $port)
+  let envPort = getEnv("PORT", "").strip()
+  let portStr = if envPort.len > 0: envPort else: config.port
+  putEnv("PORT", portStr)
   putEnv("ENV", "production")
 
   let err = execShellCmd(runPath)
