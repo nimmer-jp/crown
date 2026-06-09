@@ -1,4 +1,4 @@
-import std/[net, os, times, osproc, tables, terminal, strutils]
+import std/[json, net, os, times, osproc, tables, terminal, strutils]
 import generator
 import project
 
@@ -94,6 +94,36 @@ proc hasWatchChanges(previous, current: Table[string, Time]): bool =
       return true
   return false
 
+proc appendDevLog(outDir, event: string, data: JsonNode = newJObject()) =
+  try:
+    createDir(outDir)
+    let payload = %*{
+      "time": $getTime().toUnix(),
+      "event": event,
+      "data": data
+    }
+    let f = open(outDir / "dev.log", fmAppend)
+    defer: f.close()
+    f.writeLine($payload)
+  except CatchableError:
+    discard
+
+proc writeDevLock(outDir, appDir, port, mainPath: string, serverProc: Process) =
+  try:
+    createDir(outDir)
+    let payload = %*{
+      "version": 1,
+      "pid": processID(serverProc),
+      "watcherPid": getCurrentProcessId(),
+      "port": port,
+      "appDir": appDir,
+      "main": mainPath,
+      "startedAt": $getTime().toUnix()
+    }
+    writeFile(outDir / "dev.lock", payload.pretty())
+  except CatchableError:
+    discard
+
 proc buildAndRunServer*(appDir, outDir, mainPath: string): Process =
   styledEcho fgYellow, "\n👑 Rebuilding Crown App..."
   createDir(outDir)
@@ -105,6 +135,7 @@ proc buildAndRunServer*(appDir, outDir, mainPath: string): Process =
   # Regenerate routes
   let routesCode = generateRoutesCode(appDir, isDev = true)
   writeFile(outDir / "routes.nim", routesCode)
+  writeRouteManifest(outDir, appDir)
 
   let config = loadCrownConfig()
   let port = pickListeningPort(config.port)
@@ -115,6 +146,7 @@ proc buildAndRunServer*(appDir, outDir, mainPath: string): Process =
   let compRes = runNimCompile(config, bmDev, mainPath, [("PORT", port)])
   if compRes != 0:
     styledEcho fgRed, "❌ Compilation failed. Waiting for changes..."
+    appendDevLog(outDir, "compile_failed", %*{"appDir": appDir, "main": mainPath})
     return nil
 
   let binPath = mainPath[0 .. ^5] # remove .nim
@@ -130,10 +162,17 @@ proc buildAndRunServer*(appDir, outDir, mainPath: string): Process =
 
   styledEcho fgGreen, "✅ Compiled successfully. Starting server on port ",
       port, "..."
-  return startProcess(runPath,
+  let server = startProcess(runPath,
     env = buildProcessEnv([("PORT", port), ("ENV", "development")]),
     options = {poParentStreams}
   )
+  writeDevLock(outDir, appDir, port, mainPath, server)
+  appendDevLog(outDir, "server_started", %*{
+    "pid": processID(server),
+    "port": port,
+    "binary": runPath
+  })
+  return server
 
 proc startWatcher*(appDir = "src/app", outDir = ".crown") =
   let mainPath = outDir / "main.nim"
@@ -151,6 +190,7 @@ proc startWatcher*(appDir = "src/app", outDir = ".crown") =
 
       if serverProc != nil:
         # Kill previous process
+        appendDevLog(outDir, "server_stopping", %*{"pid": processID(serverProc)})
         terminate(serverProc)
         discard waitForExit(serverProc, 2000)
         close(serverProc)

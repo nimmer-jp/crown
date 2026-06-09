@@ -109,6 +109,7 @@ proc build*(appDir = "src/app", outDir = ".crown") =
   let routesCode = generateRoutesCode(appDir)
   let routesPath = outDir / "routes.nim"
   writeFile(routesPath, routesCode)
+  writeRouteManifest(outDir, appDir)
 
   let config = loadCrownConfig()
   let defaultListen = parseConfigPortInt(config)

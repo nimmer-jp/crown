@@ -56,12 +56,52 @@ my_awesome_app/
 │       ├── page.nim       # Automatically maps to GET `/`
 │       ├── editor/
 │       │   └── page.nim   # Automatically maps to GET `/editor`
+│       ├── (admin)/
+│       │   └── users/
+│       │       └── [id:int]/
+│       │           └── page.nim # Maps to GET `/users/{id:int}`
 │       └── api/
 │           └── save.nim   # Automatically maps to POST/GET `/api/save`
 └── public/                # Static assets
 ```
 
 > **Warning**: Never manually create `src/main.nim` or `src/routes.nim`. Crown generates highly-optimized routing logic automatically in the hidden `.crown/` directory for you.
+
+### Crown 0.6 Router Contract
+
+Crown 0.6 adds a route manifest and Next/TanStack-inspired routing conventions while keeping the legacy `p_id` syntax.
+
+- **Dynamic segments**: `p_id` and `[id]` map to `{id:str}`. Use `[id:int]` for numeric Basolato params.
+- **Route groups**: folders like `(admin)` are ignored in the URL but remain available in `.crown/manifest.json`.
+- **Nested layouts**: `layout.nim` files beside route folders wrap children before the central `src/app/layout/layout.nim`.
+- **Route data loaders**: `proc loader*(req: Request): T` can feed `proc page*(req: Request, data: T): string`.
+- **Manifest**: `crown build` and `crown dev` write `.crown/manifest.json`; dev also serves it at `/__crown/manifest`.
+
+```nim
+import crown/core
+
+type UserVm* = object
+  id*: int
+
+proc loader*(req: Request): UserVm =
+  UserVm(id: req.param("id", int))
+
+proc page*(req: Request, data: UserVm): string =
+  html"""<h1>User {data.id}</h1>"""
+```
+
+Typed request helpers are available for route params, query params, and form values:
+
+```nim
+type SearchInput = object
+  q*: string
+  page*: int
+
+proc page*(req: Request): string =
+  let input = req.search(SearchInput)
+  let id = req.param("id", int)
+  html"""<p>{input.q} / {input.page} / {id}</p>"""
+```
 
 ## 💻 1-File Components (Showcase)
 
@@ -216,8 +256,12 @@ For transient states like modal visibility, active tabs, or drag-and-drop indica
 Crown provides a centralized layout system in `src/app/layout/`.
 
 - **Default Layout**: Any `page` function without a custom layout parameter is automatically wrapped by `src/app/layout/layout.nim`.
+- **Nested layouts**: Place `layout.nim` beside route folders (see Crown 0.6 Router Contract). They wrap children before the central layout.
 - **Custom Layouts**: You can specify a layout by adding a second parameter to your `page` function: `proc page*(req: Request, layout: Layout = "admin")`. This will look for `src/app/layout/admin.nim`.
-- **Disable Layout**: If you want to return a raw snippet without any layout (e.g., for HTMX parts), use `res.disableLayout()` or handle it via `post` routes which don't apply layouts by default.
+- **Disable layout only**: `htmlResponse(...).disableLayout()` skips layout wrapping; **`injectCrownSystem` still runs** (Tailwind, client JS, dev overlay).
+- **Disable Crown inject only**: `disableCrownInject()` skips Tailwind / client scripts / PWA tags. Layout behavior is unchanged.
+- **Legacy “skip everything”**: `disableLayout(keepInject = false)` disables both layout and inject (older Crown behavior).
+- **Partial HTML**: `post` routes do not apply layouts by default. Use `disableLayout()` when returning full HTML documents without the central layout shell.
 
 ## 🔗 Basolato and Nim versions
 
@@ -240,8 +284,8 @@ Crown comes with a powerful CLI to manage your project lifecycle.
 
 - `crown init` — Scaffolds a new barebones project structure natively.
 - `crown create-app [dir]` — Scaffolds a Crown + Tiara starter (Tiara `html` page, same dependencies as `init`). Omit `dir` to use the current directory, or pass a folder name to create the project inside it.
-- `crown dev` — Boots the development server. It watches your `src/` directory and auto-recompiles routes dynamically.
-- `crown build` — Compiles your application into a highly optimized, production-ready static binary inside the `.crown` directory (`.crown/main`).
+- `crown dev` — Boots the development server. It watches your `src/` directory, auto-recompiles routes dynamically, writes `.crown/dev.lock` and `.crown/dev.log`, and forwards browser errors to `.crown/browser.log`.
+- `crown build` — Compiles your application into a highly optimized, production-ready static binary inside the `.crown` directory (`.crown/main`) and writes `.crown/manifest.json`.
 
 ## ⚙️ Compiler and Watcher Config
 
@@ -275,8 +319,6 @@ Basolato reads several environment variables very early (see upstream `baseEnv.n
 - **Logging**: Basolato defaults to file logging under `LOG_DIR` (`./logs`). On read-only or non-root images that can raise permission errors. For Cloud Run, Fly.io, etc., set `LOG_IS_FILE=false` and `LOG_IS_ERROR_FILE=false` (see sample Dockerfiles in this repo).
 - **HTTP helpers in `crown/core`**: Use `redirect`, `errorRedirect`, `cookies(request)`, `setCookie(response, cookies)`, and `queryParam` instead of importing Basolato modules directly where possible.
 - **Optional modules**: `import crown/guards` (`withSomeOrRedirect`), `import crown/rate_limit` (in-memory fixed window + `429` helper), and extra Nim search paths via `compilerPaths` in `crown.json` (or `nim.compilerPaths`) when `crown` invokes `nim c` outside `nimble`'s own wrapper.
-
-Nested layouts (“route groups”) are not generated yet; use a shared `proc` (e.g. `adminShell`) or a dedicated layout file under `src/app/layout/` today.
 
 ## 🤝 Contributing
 

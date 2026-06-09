@@ -34,6 +34,51 @@ proc queryParam*(r: Request, key: string, default = ""): string =
   ## Merges Basolato ``Params`` query and form shape into one helper (same as ``getStr`` with default).
   r.params.getStr(key, default)
 
+proc param*(r: Request, key: string, _: typedesc[string], default = ""): string {.inline.} =
+  ## Typed route/query/form param helper.
+  r.params.getStr(key, default)
+
+proc param*(r: Request, key: string, _: typedesc[int], default = 0): int {.inline.} =
+  r.params.getInt(key, default)
+
+proc param*(r: Request, key: string, _: typedesc[float], default = 0.0): float {.inline.} =
+  r.params.getFloat(key, default)
+
+proc param*(r: Request, key: string, _: typedesc[bool], default = false): bool {.inline.} =
+  r.params.getBool(key, default)
+
+proc param*(r: Request, key: string, _: typedesc[JsonNode],
+    default = newJObject()): JsonNode {.inline.} =
+  r.params.getJson(key, default)
+
+proc bindParams*[T](params: Params, _: typedesc[T]): T =
+  ## Bind merged Crown/Basolato params into a plain object.
+  ## Fields not present in the request keep their Nim default value.
+  for fieldName, field in fieldPairs(result):
+    when field is string:
+      field = params.getStr(fieldName, field)
+    elif field is int:
+      field = params.getInt(fieldName, field)
+    elif field is float:
+      field = params.getFloat(fieldName, field)
+    elif field is bool:
+      field = params.getBool(fieldName, field)
+    elif field is JsonNode:
+      field = params.getJson(fieldName, field)
+    else:
+      discard
+
+proc paramsAs*[T](r: Request, _: typedesc[T]): T {.inline.} =
+  bindParams(r.params, T)
+
+proc search*[T](r: Request, _: typedesc[T]): T {.inline.} =
+  ## Basolato merges query/form/route params; this names the intent at call sites.
+  bindParams(r.params, T)
+
+proc form*[T](r: Request, _: typedesc[T]): T {.inline.} =
+  ## Basolato merges query/form/route params; this names the intent at call sites.
+  bindParams(r.params, T)
+
 proc redirect*(url: string): Response {.inline.} =
   ## HTTP 303 redirect (Basolato-compatible).
   basolatoResponse.redirect(url)
@@ -168,6 +213,11 @@ proc clientIp*(r: Request): string =
 # Procedures manually exported
 export baco.newHttpHeaders
 export baco.getStr
+export baco.getInt
+export baco.getFloat
+export baco.getBool
+export baco.getJson
+export baco.getAll
 export basolatoResponse.body
 import tiara
 export tiara.Html
@@ -200,6 +250,49 @@ const crownClientJs = """
 <script>
 """ & clientJsCode & "\n</script>\n"
 
+const crownBrowserErrorForwarder = """
+<script>
+(function () {
+  if (!window.CROWN_DEV) return;
+  function post(kind, data) {
+    try {
+      var payload = {
+        kind: kind,
+        message: data && data.message ? String(data.message) : "",
+        source: data && data.source ? String(data.source) : window.location.href,
+        line: data && data.line ? String(data.line) : "",
+        column: data && data.column ? String(data.column) : "",
+        stack: data && data.stack ? String(data.stack) : ""
+      };
+      fetch("/__crown/client-error", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify(payload),
+        keepalive: true
+      }).catch(function () {});
+    } catch (_) {}
+  }
+  window.addEventListener("error", function (event) {
+    post("error", {
+      message: event.message,
+      source: event.filename,
+      line: event.lineno,
+      column: event.colno,
+      stack: event.error && event.error.stack
+    });
+  });
+  window.addEventListener("unhandledrejection", function (event) {
+    var reason = event.reason || {};
+    post("unhandledrejection", {
+      message: reason.message || String(reason),
+      source: window.location.href,
+      stack: reason.stack || ""
+    });
+  });
+})();
+</script>
+"""
+
 proc getCrownConfig(): JsonNode =
   result = %*{"tailwind": true, "pwa": false}
   if fileExists("crown.json"):
@@ -214,7 +307,11 @@ proc getCrownConfig(): JsonNode =
 
 proc injectCrownSystem*(content: string): string =
   ## Injects Crown system scripts and Tailwind CSS into the HTML content.
-  var injectStr = crownClientJs
+  let isDev = getEnv("ENV", "") == "development"
+  var injectStr = "<script>window.CROWN_DEV = " &
+      (if isDev: "true" else: "false") & ";</script>\n" & crownClientJs
+  if isDev:
+    injectStr &= crownBrowserErrorForwarder
   let config = getCrownConfig()
   if config["tailwind"].getBool(true):
     injectStr &= "<script src=\"https://cdn.tailwindcss.com\"></script>\n"
@@ -265,16 +362,41 @@ proc jsonResponse*(data: JsonNode, status = Http200): Response =
   headers["Content-Type"] = "application/json; charset=utf-8"
   return Response.new(status, $data, headers)
 
-proc disableLayout*(res: var Response): var Response =
-  ## Explicitly disables the layout injection for this response.
+proc disableLayout*(res: var Response; keepInject = true): var Response =
+  ## Disables wrapping with route / central ``layout.nim`` files.
+  ## ``injectCrownSystem`` still runs unless ``keepInject`` is ``false``.
   res.headers["Crown-Disable-Layout"] = "true"
+  if not keepInject:
+    res.headers["Crown-Disable-Inject"] = "true"
   return res
 
-proc disableLayout*(res: Response): Response =
-  ## Explicitly disables the layout injection for this response.
+proc disableLayout*(res: Response; keepInject = true): Response =
   var clonedHeaders = res.headers
   clonedHeaders["Crown-Disable-Layout"] = "true"
+  if not keepInject:
+    clonedHeaders["Crown-Disable-Inject"] = "true"
   return Response.new(res.status, res.body(), clonedHeaders)
+
+proc disableCrownInject*(res: var Response): var Response =
+  ## Skips ``injectCrownSystem`` (Tailwind, client JS, dev overlay, PWA tags).
+  res.headers["Crown-Disable-Inject"] = "true"
+  return res
+
+proc disableCrownInject*(res: Response): Response =
+  var clonedHeaders = res.headers
+  clonedHeaders["Crown-Disable-Inject"] = "true"
+  return Response.new(res.status, res.body(), clonedHeaders)
+
+proc bodyText*(r: Request): string =
+  ## Raw HTTP request body (for JSON POST handlers, etc.).
+  r.context.request.body
+
+proc jsonBody*(r: Request): JsonNode =
+  ## Parse the request body as JSON. Returns an empty object when the body is blank.
+  let raw = r.bodyText()
+  if raw.strip().len == 0:
+    return newJObject()
+  parseJson(raw)
 
 proc crownToString*[T](value: T): string {.inline.} =
   $value
