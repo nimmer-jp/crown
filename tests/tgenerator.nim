@@ -111,8 +111,39 @@ proc page*(req: Request, data: int): string = $data
     check route["dynamic"].getBool()
     check route["hasLoader"].getBool()
     check route["hasLoading"].getBool()
+    check route["loadingPath"].getStr() == "/users/{id:int}/__loading"
     check route["params"][0]["name"].getStr() == "id"
     check route["params"][0]["type"].getStr() == "int"
+
+  test "generateRoutesCode wires error boundaries and loading companion routes":
+    let tempDir = getTempDir() / ("crown-error-load-061-" & $getCurrentProcessId())
+    if dirExists(tempDir):
+      removeDir(tempDir)
+    createDir(tempDir / "src" / "app" / "users" / "[id:int]")
+    createDir(tempDir / "src" / "app" / "layout")
+    defer: removeDir(tempDir)
+    writeFile(tempDir / "src" / "app" / "layout" / "layout.nim",
+        "proc layout*(content: string): string = content\n")
+    writeFile(tempDir / "src" / "app" / "users" / "error.nim",
+        "proc error*(req: Request, message: string): string = message\n")
+    writeFile(tempDir / "src" / "app" / "users" / "[id:int]" / "loading.nim",
+        "proc loading*(req: Request): string = \"loading\"\n")
+    writeFile(tempDir / "src" / "app" / "users" / "[id:int]" / "page.nim",
+        """
+import crown/core
+proc page*(req: Request): string = $req.param("id", int)
+""")
+    let code = generateRoutesCode(tempDir / "src" / "app", isDev = false)
+    check code.contains("except CatchableError as crownRouteErr")
+    check code.contains(".error(req, crownRouteErr.msg)")
+    check code.contains("\"/users/{id:int}/__loading\"")
+    check code.contains(".loading(req)")
+    let manifest = parseJson(generateRouteManifest(tempDir / "src" / "app"))
+    let route = manifest["routes"][0]
+    check route["hasError"].getBool()
+    check route["hasLoading"].getBool()
+    check route["loadingPath"].getStr() == "/users/{id:int}/__loading"
+    check route["errorFile"].getStr().endsWith("users/error.nim")
 
   test "generateRoutesCode splits layout vs inject flags and omits std/os when not dev":
     let appDir = "example/src/app"

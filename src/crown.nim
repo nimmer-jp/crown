@@ -11,7 +11,7 @@ const
     "import crown/core\n" &
     "import tiara\n" &
     "\n" &
-    "proc page*(req: Request): string =\n" &
+    "proc page*(req: Request): Html =\n" &
     "  return html\"\"\"\n" &
     "    <div class=\"p-10 text-center space-y-4 max-w-2xl mx-auto\">\n" &
     "      <h1 class=\"text-4xl font-bold text-gray-800\">Welcome to Crown 👑</h1>\n" &

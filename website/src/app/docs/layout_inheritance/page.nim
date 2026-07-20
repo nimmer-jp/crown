@@ -21,7 +21,7 @@ proc page*(req: Request, layout="docs"): string =
       <p class="mb-4">When a user visits <code>/docs/routing</code>, Crown evaluates the directory tree from the root down to the target page, wrapping the HTML output at each level:</p>
       
       <div class="bg-slate-900 p-6 rounded-xl mb-6 shadow-inner text-sm font-mono text-slate-300">
-        <div class="mb-2 text-indigo-400">// 1. Root Layout (src/app/layout.nim)</div>
+        <div class="mb-2 text-indigo-400">// 1. Central Layout (src/app/layout/layout.nim)</div>
         <div class="pl-4 border-l-2 border-indigo-500/30">
           <div>&lt;html&gt;&lt;body&gt;</div>
           <div class="mb-2 text-violet-400 mt-2">// 2. Docs Layout (src/app/docs/layout.nim)</div>

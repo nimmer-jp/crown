@@ -20,11 +20,13 @@ proc page*(req: Request, layout="docs"): string =
       </ul>
 
       <h3 class="text-xl font-bold text-slate-900 mt-8 mb-4">Dynamic Routes</h3>
-      <p class="mb-4">You can define dynamic route parameters by prefixing the filename with <code>p_</code> (parameter):</p>
+      <p class="mb-4">Crown 0.6 supports legacy <code>p_</code> segments and Next-style brackets:</p>
       <ul class="space-y-3 mb-6 bg-slate-50 p-6 rounded-xl border border-slate-100 list-none pl-0">
-        <li class="flex items-center gap-3"><code class="bg-white px-2 py-1 rounded border text-indigo-600 text-sm">src/app/blog/p_id.nim</code> <span>→</span> <span class="font-mono text-sm text-slate-500 bg-slate-200/50 px-2 py-0.5 rounded">/blog/:id</span></li>
+        <li class="flex items-center gap-3"><code class="bg-white px-2 py-1 rounded border text-indigo-600 text-sm">src/app/blog/p_id.nim</code> <span>→</span> <span class="font-mono text-sm text-slate-500 bg-slate-200/50 px-2 py-0.5 rounded">/blog/&#123;id:str&#125;</span></li>
+        <li class="flex items-center gap-3"><code class="bg-white px-2 py-1 rounded border text-indigo-600 text-sm">src/app/users/[id:int]/page.nim</code> <span>→</span> <span class="font-mono text-sm text-slate-500 bg-slate-200/50 px-2 py-0.5 rounded">/users/&#123;id:int&#125;</span></li>
+        <li class="flex items-center gap-3"><code class="bg-white px-2 py-1 rounded border text-indigo-600 text-sm">src/app/(admin)/...</code> <span>→</span> <span class="font-mono text-sm text-slate-500 bg-slate-200/50 px-2 py-0.5 rounded">URL から除外（route group）</span></li>
       </ul>
-      <p class="mb-4">Inside <code>p_id.nim</code>, you can easily access the dynamic parameter through the Request object via <code>req.pathParams["id"]</code>.</p>
+      <p class="mb-4">パラメータは <code>req.param("id", int)</code> や <code>req.search(MyInput)</code> で読めます。ルート横の <code>error.nim</code> / <code>loading.nim</code> はそれぞれエラー境界と <code>&#123;path&#125;/__loading</code> フラグメントになります。</p>
 
       <div class="mt-12 pt-8 border-t border-slate-200">
         <div class="flex justify-between items-center">

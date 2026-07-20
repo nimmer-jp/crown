@@ -12,6 +12,10 @@ type
     isCentral: bool
     centralName: string
 
+  SpecialModule = object
+    filePath: string
+    importName: string
+
   RouteEntry = object
     filePath: string
     urlPath: string
@@ -23,6 +27,8 @@ type
     hasLoader: bool
     hasLoading: bool
     hasError: bool
+    errorModule: SpecialModule
+    loadingModule: SpecialModule
 
 proc normalizeModulePath*(path: string): string =
   ## Convert filesystem separators to Nim module separators.
@@ -214,6 +220,33 @@ proc inheritedLayoutAliases(appDir, filePath: string,
   if central.len > 0:
     result.add(central)
 
+proc findNearestSpecialModule*(appDir, filePath, fileName: string): SpecialModule =
+  ## Walk from the route folder upward (including ``appDir``) for ``error.nim`` /
+  ## ``loading.nim``. Nearest file wins.
+  var current = filePath.parentDir()
+  let root = normalizedPath(appDir)
+  while normalizedPath(current).startsWith(root):
+    let candidate = current / fileName
+    if fileExists(candidate):
+      let rel = normalizeModulePath(candidate.relativePath(sourceRoot(appDir)))
+      let kind = fileName.replace(".nim", "")
+      return SpecialModule(
+        filePath: rel,
+        importName: "crown_" & kind & "_" & makeImportAlias(rel)
+      )
+    if normalizedPath(current) == root:
+      break
+    let next = current.parentDir()
+    if next == current:
+      break
+    current = next
+
+proc loadingUrlPath*(urlPath: string): string =
+  ## Companion path for route-local ``loading.nim`` fragments (HTMX / crown-get).
+  if urlPath == "/" or urlPath.len == 0:
+    return "/__loading"
+  urlPath & "/__loading"
+
 proc generateCrownEnvPreserverModuleSource*(): string =
   ## Materialized as ``.crown/crown_env_preserver.nim``. Load project-root ``.env`` files,
   ## then snapshot ``PORT`` for Basolato incremental dev quirks. Import this module
@@ -241,6 +274,8 @@ proc collectRouteEntries(appDir: string,
 
     let relPath = normalizeModulePath(path.relativePath(sourceRoot(appDir)))
     let routePath = resolveRoutePath(appDir, path)
+    let errorMod = findNearestSpecialModule(appDir, path, "error.nim")
+    let loadingMod = findNearestSpecialModule(appDir, path, "loading.nim")
     let entry = RouteEntry(
       filePath: relPath,
       urlPath: routePath.urlPath,
@@ -250,8 +285,10 @@ proc collectRouteEntries(appDir: string,
       routeGroups: routePath.routeGroups,
       defaultLayoutAliases: inheritedLayoutAliases(appDir, path, layouts),
       hasLoader: hasExportedProc(content, "loader"),
-      hasLoading: fileExists(path.parentDir() / "loading.nim"),
-      hasError: fileExists(path.parentDir() / "error.nim")
+      hasLoading: loadingMod.importName.len > 0,
+      hasError: errorMod.importName.len > 0,
+      errorModule: errorMod,
+      loadingModule: loadingMod
     )
 
     if path.endsWith("not_found.nim"):
@@ -295,7 +332,10 @@ proc routeManifestJson*(appDir: string): JsonNode =
       "dynamic": e.params.len > 0,
       "hasLoader": e.hasLoader,
       "hasLoading": e.hasLoading,
-      "hasError": e.hasError
+      "hasError": e.hasError,
+      "errorFile": (if e.hasError: "src/" & e.errorModule.filePath & ".nim" else: ""),
+      "loadingFile": (if e.hasLoading: "src/" & e.loadingModule.filePath & ".nim" else: ""),
+      "loadingPath": (if e.hasLoading: loadingUrlPath(e.urlPath) else: "")
     })
 
 proc generateRouteManifest*(appDir: string): string =
@@ -331,6 +371,16 @@ proc generateRoutesCode*(appDir: string, isDev: bool = false): string =
     if not uniqueImports.contains(importStmt):
       code &= importStmt
       uniqueImports.incl(importStmt)
+    if e.errorModule.importName.len > 0:
+      let errStmt = &"import \"../src/{e.errorModule.filePath}.nim\" as {e.errorModule.importName}\n"
+      if not uniqueImports.contains(errStmt):
+        code &= errStmt
+        uniqueImports.incl(errStmt)
+    if e.loadingModule.importName.len > 0:
+      let loadStmt = &"import \"../src/{e.loadingModule.filePath}.nim\" as {e.loadingModule.importName}\n"
+      if not uniqueImports.contains(loadStmt):
+        code &= loadStmt
+        uniqueImports.incl(loadStmt)
 
   if hasNotFound:
     code &= &"import \"../src/{notFoundEntry.filePath}.nim\" as {notFoundEntry.importName}\n"
@@ -365,6 +415,8 @@ proc generateRoutesCode*(appDir: string, isDev: bool = false): string =
       let httpMethod = if m == "page": "get" else: m
       let explicitArg = if explicitLayout != "": "\"" & explicitLayout &
           "\"" else: "\"\""
+      let useErrorBoundary = e.errorModule.importName.len > 0
+      let ind = if useErrorBoundary: "      " else: "    "
 
       let rn = "crownRoute" & $crownIdx
       inc crownIdx
@@ -375,29 +427,43 @@ proc generateRoutesCode*(appDir: string, isDev: bool = false): string =
       code &= &"let {rn} = crownRouteRegister(\"{httpMethod}\", \"{e.urlPath}\"):\n"
       code &= &"    var res: crown.Response\n"
       code &= &"    let req = crown.Request(context: c, params: p)\n"
+      if useErrorBoundary:
+        code &= "    try:\n"
       if m == "page":
-        code &= &"    when compiles({e.importName}.loader(req)):\n"
-        code &= &"      when compiles(await {e.importName}.loader(req)):\n"
-        code &= &"        let crownLoaderData = await {e.importName}.loader(req)\n"
-        code &= &"      else:\n"
-        code &= &"        let crownLoaderData = {e.importName}.loader(req)\n"
-        code &= &"      when compiles({e.importName}.{m}(req, crownLoaderData, {explicitArg})):\n"
-        code &= &"        crownSetRouteResponse(res, {e.importName}.{m}(req, crownLoaderData, {explicitArg}))\n"
-        code &= &"      elif compiles({e.importName}.{m}(req, crownLoaderData)):\n"
-        code &= &"        crownSetRouteResponse(res, {e.importName}.{m}(req, crownLoaderData))\n"
-        code &= &"      elif compiles({e.importName}.{m}(req, {explicitArg})):\n"
-        code &= &"        crownSetRouteResponse(res, {e.importName}.{m}(req, {explicitArg}))\n"
-        code &= &"      else:\n"
-        code &= &"        crownSetRouteResponse(res, {e.importName}.{m}(req))\n"
-        code &= &"    elif compiles({e.importName}.{m}(req, {explicitArg})):\n"
+        code &= &"{ind}when compiles({e.importName}.loader(req)):\n"
+        code &= &"{ind}  when compiles(await {e.importName}.loader(req)):\n"
+        code &= &"{ind}    let crownLoaderData = await {e.importName}.loader(req)\n"
+        code &= &"{ind}  else:\n"
+        code &= &"{ind}    let crownLoaderData = {e.importName}.loader(req)\n"
+        code &= &"{ind}  when compiles({e.importName}.{m}(req, crownLoaderData, {explicitArg})):\n"
+        code &= &"{ind}    crownSetRouteResponse(res, {e.importName}.{m}(req, crownLoaderData, {explicitArg}))\n"
+        code &= &"{ind}  elif compiles({e.importName}.{m}(req, crownLoaderData)):\n"
+        code &= &"{ind}    crownSetRouteResponse(res, {e.importName}.{m}(req, crownLoaderData))\n"
+        code &= &"{ind}  elif compiles({e.importName}.{m}(req, {explicitArg})):\n"
+        code &= &"{ind}    crownSetRouteResponse(res, {e.importName}.{m}(req, {explicitArg}))\n"
+        code &= &"{ind}  else:\n"
+        code &= &"{ind}    crownSetRouteResponse(res, {e.importName}.{m}(req))\n"
+        code &= &"{ind}elif compiles({e.importName}.{m}(req, {explicitArg})):\n"
       else:
-        code &= &"    when compiles({e.importName}.{m}(req, {explicitArg})):\n"
-      code &= &"      crownSetRouteResponse(res, {e.importName}.{m}(req, {explicitArg}))\n"
-      code &= &"    elif compiles({e.importName}.{m}(req)):\n"
-      code &= &"      crownSetRouteResponse(res, {e.importName}.{m}(req))\n"
-      code &= &"    else:\n"
-      code &= &"      # Fallback to pure Basolato signature for backwards compatibility\n"
-      code &= &"      crownSetRouteResponse(res, {e.importName}.{m}(c, p))\n"
+        code &= &"{ind}when compiles({e.importName}.{m}(req, {explicitArg})):\n"
+      code &= &"{ind}  crownSetRouteResponse(res, {e.importName}.{m}(req, {explicitArg}))\n"
+      code &= &"{ind}elif compiles({e.importName}.{m}(req)):\n"
+      code &= &"{ind}  crownSetRouteResponse(res, {e.importName}.{m}(req))\n"
+      code &= &"{ind}else:\n"
+      code &= &"{ind}  # Fallback to pure Basolato signature for backwards compatibility\n"
+      code &= &"{ind}  crownSetRouteResponse(res, {e.importName}.{m}(c, p))\n"
+      if useErrorBoundary:
+        let errAlias = e.errorModule.importName
+        code &= "    except CatchableError as crownRouteErr:\n"
+        code &= &"      when compiles({errAlias}.error(req, crownRouteErr)):\n"
+        code &= &"        crownSetRouteResponse(res, {errAlias}.error(req, crownRouteErr))\n"
+        code &= &"      elif compiles({errAlias}.error(req, crownRouteErr.msg)):\n"
+        code &= &"        crownSetRouteResponse(res, {errAlias}.error(req, crownRouteErr.msg))\n"
+        code &= &"      elif compiles({errAlias}.error(req)):\n"
+        code &= &"        crownSetRouteResponse(res, {errAlias}.error(req))\n"
+        code &= "      else:\n"
+        code &= "        raise\n"
+        code &= "      res.status = Http500\n"
       code &= &"    \n"
       code &= &"    var contentType = \"\"\n"
       code &= &"    if res.headers.hasKey(\"Content-Type\"): contentType = $res.headers[\"Content-Type\"]\n"
@@ -421,6 +487,31 @@ proc generateRoutesCode*(appDir: string, isDev: bool = false): string =
       code &= &"      if isCrownInjectEnabled:\n"
       code &= &"        htmlContent = injectCrownSystem(htmlContent)\n"
       code &= &"      res = htmlResponse(htmlContent, res.status)\n"
+      code &= &"    return res\n"
+      code &= "\n"
+
+    if e.loadingModule.importName.len > 0:
+      let loadPath = loadingUrlPath(e.urlPath)
+      let loadAlias = e.loadingModule.importName
+      let rnLoad = "crownRoute" & $crownIdx
+      inc crownIdx
+      routeNames.add(rnLoad)
+      code &= &"let {rnLoad} = crownRouteRegister(\"get\", \"{loadPath}\"):\n"
+      code &= &"    var res: crown.Response\n"
+      code &= &"    let req = crown.Request(context: c, params: p)\n"
+      code &= &"    when compiles({loadAlias}.loading(req)):\n"
+      code &= &"      crownSetRouteResponse(res, {loadAlias}.loading(req))\n"
+      code &= &"    elif compiles({loadAlias}.loading()):\n"
+      code &= &"      crownSetRouteResponse(res, {loadAlias}.loading())\n"
+      code &= &"    else:\n"
+      code &= &"      res = htmlResponse(\"\")\n"
+      code &= &"    # Loading fragments skip layout; inject stays available unless disabled.\n"
+      code &= &"    var contentType = \"\"\n"
+      code &= &"    if res.headers.hasKey(\"Content-Type\"): contentType = $res.headers[\"Content-Type\"]\n"
+      code &= &"    elif res.headers.hasKey(\"content-type\"): contentType = $res.headers[\"content-type\"]\n"
+      code &= &"    let isCrownInjectEnabled = not res.headers.hasKey(\"Crown-Disable-Inject\")\n"
+      code &= &"    if contentType.contains(\"text/html\") and isCrownInjectEnabled:\n"
+      code &= &"      res = htmlResponse(injectCrownSystem(res.body()), res.status)\n"
       code &= &"    return res\n"
       code &= "\n"
 

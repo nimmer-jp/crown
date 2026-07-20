@@ -75,6 +75,8 @@ Crown 0.6 adds a route manifest and Next/TanStack-inspired routing conventions w
 - **Route groups**: folders like `(admin)` are ignored in the URL but remain available in `.crown/manifest.json`.
 - **Nested layouts**: `layout.nim` files beside route folders wrap children before the central `src/app/layout/layout.nim`.
 - **Route data loaders**: `proc loader*(req: Request): T` can feed `proc page*(req: Request, data: T): string`.
+- **Error boundaries**: nearest `error.nim` (walking up from the route folder) catches `CatchableError` from `page` / `loader` and renders `proc error*(req, …)`.
+- **Loading fragments**: nearest `loading.nim` is served at `{path}/__loading` (or `/__loading` for `/`) for HTMX / `crown-get` placeholders.
 - **Manifest**: `crown build` and `crown dev` write `.crown/manifest.json`; dev also serves it at `/__crown/manifest`.
 
 ```nim
@@ -89,6 +91,20 @@ proc loader*(req: Request): UserVm =
 proc page*(req: Request, data: UserVm): string =
   html"""<h1>User {data.id}</h1>"""
 ```
+
+Route-local error and loading companions:
+
+```nim
+# src/app/users/[id:int]/error.nim
+proc error*(req: Request, message: string): string =
+  html"""<p class="text-red-600">{message}</p>"""
+
+# src/app/users/[id:int]/loading.nim  → GET /users/{id:int}/__loading
+proc loading*(req: Request): string =
+  html"""<p>Loading…</p>"""
+```
+
+`error*` may take `(req, err: ref CatchableError)`, `(req, message: string)`, or `(req)` alone.
 
 Typed request helpers are available for route params, query params, and form values:
 
