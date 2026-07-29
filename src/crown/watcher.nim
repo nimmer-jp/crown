@@ -20,10 +20,11 @@ proc parsePreferredPort(pref: string): int =
     discard
   return 8080
 
-proc tcpPortFree(host: string, port: Port): bool =
+proc canBindWithoutReuse*(host: string, port: Port): bool =
+  ## Probe must NOT use ``SO_REUSEADDR`` — that masks real conflicts (e.g. an
+  ## existing listener still lets a reuse-enabled probe ``bind`` succeed).
   var sock = newSocket()
   try:
-    sock.setSockOpt(OptReuseAddr, true)
     sock.bindAddr(port, host)
     return true
   except CatchableError:
@@ -31,7 +32,40 @@ proc tcpPortFree(host: string, port: Port): bool =
   finally:
     sock.close()
 
-proc pickListeningPort(cfgPort: string; maxAttempts = 512): string =
+proc localhostOccupied*(port: Port): bool =
+  ## Something already accepts connections on loopback (browser target).
+  var sock = newSocket()
+  try:
+    sock.connect("127.0.0.1", port, 200)
+    return true
+  except CatchableError:
+    discard
+  finally:
+    sock.close()
+
+  var sock6 = newSocket(Domain.AF_INET6)
+  try:
+    sock6.connect("::1", port, 200)
+    return true
+  except CatchableError:
+    return false
+  finally:
+    sock6.close()
+
+proc tcpPortFree*(host: string, port: Port): bool =
+  ## Free means Crown can bind ``host:port`` *and* the addresses a browser uses
+  ## (loopback) are not already taken when listening on all interfaces.
+  if not canBindWithoutReuse(host, port):
+    return false
+  # When listening on all interfaces, also ensure localhost is free.
+  if host in ["0.0.0.0", "::", ""]:
+    if localhostOccupied(port):
+      return false
+    if not canBindWithoutReuse("127.0.0.1", port):
+      return false
+  return true
+
+proc pickListeningPort*(cfgPort: string; maxAttempts = 512): string =
   ## Prefer ``cfgPort``, then successive ports until a TCP bind succeeds (avoids
   ## Basolato "address already in use" on crowded dev machines).
   let host = watcherListenHostRaw()

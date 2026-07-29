@@ -1,6 +1,6 @@
 # Package
 
-version       = "0.6.1"
+version       = "0.6.2"
 author        = "pianopia"
 description   = "Next generation meta-framework for Nim, powered by Basolato and HTMX"
 license       = "MIT"
@@ -29,3 +29,4 @@ task test, "Run unit tests":
   exec "nim c -r -d:httpbeast tests/tgenerator.nim"
   exec "nim c -r -d:httpbeast --out:tests/tproject.out tests/tproject.nim"
   exec "nim c -r -d:httpbeast tests/tscoped_component.nim"
+  exec "nim c -r -d:httpbeast tests/twatcher_port.nim"
