@@ -1,6 +1,6 @@
 <div align="center">
   <h1>👑 Crown Framework</h1>
-  <p><strong>The Full-stack Nim Meta-Framework. Next.js DX meets the speed of Nim.</strong></p>
+  <p><strong>TanStack の型安全性と Remix の Web 標準を、Nim の超高速ビルド・単一バイナリ・ゼロコストマクロで。</strong></p>
 
   <p>
     <a href="https://nim-lang.org"><img src="https://img.shields.io/badge/Nim-2.2+-FFE953?logo=nim&logoColor=white" alt="Nim Version"></a>
@@ -11,16 +11,21 @@
 
 ---
 
-Crown is a next-generation meta-framework for the [Nim](https://nim-lang.org/) programming language. It combines the blazing-fast performance of Nim with a modern, file-system-based routing architecture inspired by Next.js (App Router), empowering you to build hypermedia-driven applications with zero client-side JavaScript configuration.
+Crown is a next-generation meta-framework for the [Nim](https://nim-lang.org/) programming language. File-system routing (Next.js App Router), Remix-style `loader` / `action`, and TanStack-grade typed search params / links — compiled away by Nim macros into a single native binary. Hypermedia (HTMX-like `crown-get` / `crown-post`) is the default; no `node_modules`, no client bundle tax.
 
 ## ✨ Features and Philosophy
 
 - **Next.js-like Developer Experience (DX)**: Ditch manual route definitions. Crown uses a File-System Routing architecture where your `src/app/` directory perfectly mirrors your app's URLs.
-- **Zero JS (State Management Free)**: Crown treats HTML as the engine of application state. By leveraging HTMX automatically under the hood, you get SPA-like partial page updates and rich UX without writing a single line of client-side JavaScript.
+- **Typed Search Params**: `query` macros generate zero-cost parsing for `?page=1&sort=desc` — `int`, enums (`choice(asc, desc)`), and `Option[T]` are decided at compile time.
+- **Loader / Action (Remix cycle)**: `loader` is GET data. `action` is POST mutation. On success Crown re-runs `loader` + `page` (automatic revalidation) unless you redirect or return partial HTML.
+- **Typed Links**: Route helpers such as `hrefUsers(id: int)` are generated from `.crown/manifest.json`. Typos and type mismatches are compile errors.
+- **Server Functions**: `serverFn` publishes a typed JSON RPC at `/__crown/fn/<name>` (TanStack `createServerFn` analogue) callable from `window.crownServerFn`.
+- **Zero JS (State Management Free)**: Crown treats HTML as the engine of application state. By leveraging HTMX-like attributes automatically under the hood, you get SPA-like partial page updates without writing client-side JavaScript.
 - **Solid Bedrock**: We didn't reinvent the wheel. Crown is built upon **[Basolato](https://github.com/itsumura-h/nim-basolato)**, leveraging its battle-tested HTTP server, security, and session management capabilities—completely abstracted away for your convenience.
 - **Component Co-location**: No templating black magic. Write your views and your backend logic cleanly together in the same `.nim` file using native procs and the `html""" """` macro.
 - **Tailwind CSS Ready**: Crown automatically injects Tailwind CSS by default, enabling you to style your application instantly without complex build pipelines.
 - **Zero-Config PWA**: Automatically generates a Service Worker, manifest, and offline fallback (including Background Sync for API requests) with a single flip of a flag in `crown.json`.
+- **Single binary, multi-target**: Native server (`httpbeast` / `mummy` via Basolato) today; Nim's C / JS / WASM backends make Edge and static export a straight-line evolution.
 
 ## 🚀 Quick Start
 
@@ -67,15 +72,19 @@ my_awesome_app/
 
 > **Warning**: Never manually create `src/main.nim` or `src/routes.nim`. Crown generates highly-optimized routing logic automatically in the hidden `.crown/` directory for you.
 
-### Crown 0.6 Router Contract
+### Crown 0.7 Router Contract
 
-Crown 0.6 adds a route manifest and Next/TanStack-inspired routing conventions while keeping the legacy `p_id` syntax.
+Crown 0.7 keeps the 0.6 file-system router and adds TanStack / Remix-inspired data APIs.
 
 - **Dynamic segments**: `p_id` and `[id]` map to `{id:str}`. Use `[id:int]` for numeric Basolato params.
 - **Route groups**: folders like `(admin)` are ignored in the URL but remain available in `.crown/manifest.json`.
 - **Nested layouts**: `layout.nim` files beside route folders wrap children before the central `src/app/layout/layout.nim`.
 - **Route data loaders**: `proc loader*(req: Request): T` can feed `proc page*(req: Request, data: T): string`.
-- **Error boundaries**: nearest `error.nim` (walking up from the route folder) catches `CatchableError` from `page` / `loader` and renders `proc error*(req, …)`.
+- **Actions**: `proc action*(req: Request)` is POST on the same path. `void` / `revalidate()` / empty body re-runs `loader` + `page`.
+- **Typed query objects**: `query Name: ...` plus `req.search(Name)` (enums, defaults, `Option[T]`).
+- **Typed links**: `hrefUsers(id: int)` from the manifest; `href("/products", queryObj)` for search params.
+- **Server functions**: `serverFn:` procs are exposed at `POST /__crown/fn/<name>`.
+- **Error boundaries**: nearest `error.nim` (walking up from the route folder) catches `CatchableError` from `page` / `loader` / `action` and renders `proc error*(req, …)`.
 - **Loading fragments**: nearest `loading.nim` is served at `{path}/__loading` (or `/__loading` for `/`) for HTMX / `crown-get` placeholders.
 - **Manifest**: `crown build` and `crown dev` write `.crown/manifest.json`; dev also serves it at `/__crown/manifest`.
 
@@ -106,7 +115,43 @@ proc loading*(req: Request): string =
 
 `error*` may take `(req, err: ref CatchableError)`, `(req, message: string)`, or `(req)` alone.
 
-Typed request helpers are available for route params, query params, and form values:
+Typed search params via the `query` macro (TanStack-style, zero-cost at runtime):
+
+```nim
+query ProductsQuery:
+  page: int = 1
+  sort: choice(asc, desc) = desc
+  filter: Option[string]
+
+proc page*(req: Request): string =
+  let q = req.search(ProductsQuery)
+  html"""<p>{q.page} / {q.sort}</p>"""
+```
+
+Mutations use `action` on the same path. After a `void` action, Crown re-runs `loader` + `page`:
+
+```nim
+proc action*(req: Request) =
+  db.save(req.form(AddProduct))
+
+proc action*(req: Request): ActionRevalidate =
+  db.save(req.form(AddProduct))
+  revalidate()
+```
+
+Typed links and server functions:
+
+```nim
+let url = hrefUsers(id = 42)
+let list = href("/products", ProductsQuery(page: 2))
+
+serverFn:
+  proc updateUser*(id: string, name: string): User =
+    db.users.update(id, name)
+# POST /__crown/fn/updateUser  —  window.crownServerFn("updateUser", {id, name})
+```
+
+Typed request helpers are also available for route params, query params, and form values:
 
 ```nim
 type SearchInput = object

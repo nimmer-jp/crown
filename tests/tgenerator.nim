@@ -7,20 +7,29 @@ import crown/generator
 
 suite "Generator tests":
   test "detectMethods extracts http methods from nim file code":
-    let sampleContent = """
-    import crown/core
-
-    proc page*(context: Context, params: Params): Future[Response] {.async.} =
-      return htmlResponse fmt"hello"
-
-    proc post*(context: Context, params: Params): Future[Response] {.async.} =
-      return htmlResponse fmt"saved"
-    """
+    let sampleContent = "import crown/core\n\n" &
+        "proc page*(context: Context, params: Params): Future[Response] {.async.} =\n" &
+        "  return htmlResponse fmt\"hello\"\n\n" &
+        "proc post*(context: Context, params: Params): Future[Response] {.async.} =\n" &
+        "  return htmlResponse fmt\"saved\"\n"
     let methods = detectMethods(sampleContent)
     let methodNames = methods.mapIt(it.name)
     check "page" in methodNames
     check "post" in methodNames
     check "get" notin methodNames
+
+  test "detectMethods ignores indented proc samples inside templates":
+    let sampleContent = "proc body*(): string =\n" &
+        "  html\"\"\"\n" &
+        "  proc page*(req: Request): string =\n" &
+        "    render(data)\n" &
+        "  proc action*(req: Request) =\n" &
+        "    discard\n" &
+        "  \"\"\"\n"
+    check detectMethods(sampleContent).len == 0
+    check not hasExportedProc(sampleContent, "page")
+    check not hasExportedProc(sampleContent, "action")
+    check not hasExportedProc(sampleContent, "loader")
 
   test "resolveUrlPath properly resolves nested directory structures":
     # Mocks app structure
@@ -86,7 +95,7 @@ proc page*(req: Request, data: UserVm): string =
     check code.contains("/__crown/manifest")
     check code.contains("/__crown/client-error")
 
-  test "generateRouteManifest records 0.6 route metadata":
+  test "generateRouteManifest records 0.7 route metadata":
     let tempDir = getTempDir() / ("crown-manifest-06-" & $getCurrentProcessId())
     if dirExists(tempDir):
       removeDir(tempDir)
@@ -104,7 +113,7 @@ proc loader*(req: Request): int = req.param("id", int)
 proc page*(req: Request, data: int): string = $data
 """)
     let manifest = parseJson(generateRouteManifest(tempDir / "src" / "app"))
-    check manifest["version"].getStr() == "0.6"
+    check manifest["version"].getStr() == "0.7"
     check manifest["routes"].len == 1
     let route = manifest["routes"][0]
     check route["path"].getStr() == "/users/{id:int}"
@@ -144,6 +153,63 @@ proc page*(req: Request): string = $req.param("id", int)
     check route["hasLoading"].getBool()
     check route["loadingPath"].getStr() == "/users/{id:int}/__loading"
     check route["errorFile"].getStr().endsWith("users/error.nim")
+
+  test "website blog article helpers are not registered as HTTP routes":
+    if not dirExists("website/src/app"):
+      skip()
+    let manifest = parseJson(generateRouteManifest("website/src/app"))
+    var paths: seq[string]
+    for route in manifest["routes"]:
+      paths.add(route["path"].getStr())
+    check "/blog" in paths
+    check "/blog/{slug:str}" in paths
+    check "/blog/articles/crown_0_7" notin paths
+    let code = generateRoutesCode("website/src/app", isDev = false)
+    check "app_blog_articles_crown_0_7.page(" notin code
+
+  test "generateRoutesCode wires action POST with loader revalidation":
+    let tempDir = getTempDir() / ("crown-action-07-" & $getCurrentProcessId())
+    if dirExists(tempDir):
+      removeDir(tempDir)
+    createDir(tempDir / "src" / "app" / "products")
+    createDir(tempDir / "src" / "app" / "layout")
+    defer: removeDir(tempDir)
+    writeFile(tempDir / "src" / "app" / "layout" / "layout.nim",
+        "proc layout*(content: string): string = content\n")
+    writeFile(tempDir / "src" / "app" / "products" / "page.nim",
+        """
+import crown/core
+proc loader*(req: Request): int = 1
+proc action*(req: Request) = discard
+proc page*(req: Request, data: int): string = $data
+""")
+    let code = generateRoutesCode(tempDir / "src" / "app", isDev = false)
+    check code.contains("crownRouteRegister(\"post\", \"/products\")")
+    check code.contains(".action(req)")
+    check code.contains("crownTreatAsPage = true")
+    check code.contains(".loader(req)")
+    let manifest = parseJson(generateRouteManifest(tempDir / "src" / "app"))
+    check manifest["routes"][0]["hasAction"].getBool()
+    check manifest["routes"][0]["hasLoader"].getBool()
+
+  test "generateRoutesCode registers serverFn JSON endpoints":
+    let tempDir = getTempDir() / ("crown-fn-07-" & $getCurrentProcessId())
+    if dirExists(tempDir):
+      removeDir(tempDir)
+    createDir(tempDir / "src" / "app")
+    defer: removeDir(tempDir)
+    writeFile(tempDir / "src" / "app" / "users.nim",
+        """
+import crown/core
+serverFn:
+  proc updateUser*(id: string, name: string): string =
+    id & name
+""")
+    let code = generateRoutesCode(tempDir / "src" / "app", isDev = false)
+    check code.contains("crownRouteRegister(\"post\", \"/__crown/fn/updateUser\")")
+    check code.contains(".crownServerFn_updateUser(")
+    let manifest = parseJson(generateRouteManifest(tempDir / "src" / "app"))
+    check manifest["routes"][0]["serverFns"][0].getStr() == "updateUser"
 
   test "generateRoutesCode splits layout vs inject flags and omits std/os when not dev":
     let appDir = "example/src/app"

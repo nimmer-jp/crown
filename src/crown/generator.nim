@@ -1,4 +1,5 @@
 import std/[os, strutils, strformat, sets, json]
+import ./server_fn
 
 type
   RouteParam* = object
@@ -27,6 +28,8 @@ type
     hasLoader: bool
     hasLoading: bool
     hasError: bool
+    hasAction: bool
+    serverFns: seq[string]
     errorModule: SpecialModule
     loadingModule: SpecialModule
 
@@ -64,30 +67,40 @@ proc sourceRoot(appDir: string): string =
     return "."
   parent
 
+proc isModuleLevelProcLine(line: string): bool =
+  ## Module-level procs start at column 0. Indented ``proc page*`` inside
+  ## ``html"""`` samples (blog posts, docs) must not become routes.
+  if line.len == 0 or line[0] in {' ', '\t'}:
+    return false
+  line.strip().startsWith("proc ")
+
 proc detectMethods*(content: string): seq[tuple[name: string, layout: string]] =
   var methods: seq[tuple[name: string, layout: string]]
   for line in content.splitLines():
+    if not isModuleLevelProcLine(line):
+      continue
     let l = line.strip()
-    if l.startsWith("proc "):
-      let parts = l.split({' ', '(', '*', ':', '\t'})
-      if parts.len > 1:
-        let name = parts[1]
-        if name in ["get", "post", "put", "delete", "patch", "page"]:
-          var layoutName = ""
-          let layoutIdx = l.find("layout")
-          if layoutIdx != -1:
-            let eqIdx = l.find("=", layoutIdx)
-            if eqIdx != -1:
-              let quote1Idx = l.find("\"", eqIdx)
-              if quote1Idx != -1:
-                let quote2Idx = l.find("\"", quote1Idx + 1)
-                if quote2Idx != -1:
-                  layoutName = l[quote1Idx + 1 .. quote2Idx - 1]
-          methods.add((name, layoutName))
+    let parts = l.split({' ', '(', '*', ':', '\t'})
+    if parts.len > 1:
+      let name = parts[1]
+      if name in ["get", "post", "put", "delete", "patch", "page", "action"]:
+        var layoutName = ""
+        let layoutIdx = l.find("layout")
+        if layoutIdx != -1:
+          let eqIdx = l.find("=", layoutIdx)
+          if eqIdx != -1:
+            let quote1Idx = l.find("\"", eqIdx)
+            if quote1Idx != -1:
+              let quote2Idx = l.find("\"", quote1Idx + 1)
+              if quote2Idx != -1:
+                layoutName = l[quote1Idx + 1 .. quote2Idx - 1]
+        methods.add((name, layoutName))
   return methods
 
 proc hasExportedProc*(content, name: string): bool =
   for line in content.splitLines():
+    if not isModuleLevelProcLine(line):
+      continue
     let l = line.strip()
     if l.startsWith("proc " & name & "*(") or
         l.startsWith("proc " & name & " *("):
@@ -269,13 +282,19 @@ proc collectRouteEntries(appDir: string,
       continue
     let content = readFile(path)
     let methods = detectMethods(content)
-    if methods.len == 0:
+    let serverFns = detectServerFns(content)
+    if methods.len == 0 and serverFns.len == 0:
       continue
 
     let relPath = normalizeModulePath(path.relativePath(sourceRoot(appDir)))
     let routePath = resolveRoutePath(appDir, path)
     let errorMod = findNearestSpecialModule(appDir, path, "error.nim")
     let loadingMod = findNearestSpecialModule(appDir, path, "loading.nim")
+    var hasAction = false
+    for m in methods:
+      if m.name == "action":
+        hasAction = true
+        break
     let entry = RouteEntry(
       filePath: relPath,
       urlPath: routePath.urlPath,
@@ -287,6 +306,8 @@ proc collectRouteEntries(appDir: string,
       hasLoader: hasExportedProc(content, "loader"),
       hasLoading: loadingMod.importName.len > 0,
       hasError: errorMod.importName.len > 0,
+      hasAction: hasAction,
+      serverFns: serverFns,
       errorModule: errorMod,
       loadingModule: loadingMod
     )
@@ -301,14 +322,18 @@ proc routeManifestJson*(appDir: string): JsonNode =
   let layouts = discoverLayouts(appDir)
   let collected = collectRouteEntries(appDir, layouts)
   result = %*{
-    "version": "0.6",
+    "version": "0.7",
     "appDir": appDir,
     "routes": []
   }
   for e in collected.entries:
     var methods = newJArray()
     for m in e.methods:
-      methods.add(%(if m.name == "page": "GET" else: m.name.toUpperAscii()))
+      let label =
+        if m.name == "page": "GET"
+        elif m.name == "action": "POST"
+        else: m.name.toUpperAscii()
+      methods.add(%label)
     var params = newJArray()
     for p in e.params:
       params.add(%*{
@@ -322,6 +347,9 @@ proc routeManifestJson*(appDir: string): JsonNode =
     var layoutsJson = newJArray()
     for alias in e.defaultLayoutAliases:
       layoutsJson.add(%findLayoutFile(layouts, alias))
+    var serverFnsJson = newJArray()
+    for fnName in e.serverFns:
+      serverFnsJson.add(%fnName)
     result["routes"].add(%*{
       "path": e.urlPath,
       "file": "src/" & e.filePath & ".nim",
@@ -331,8 +359,10 @@ proc routeManifestJson*(appDir: string): JsonNode =
       "layouts": layoutsJson,
       "dynamic": e.params.len > 0,
       "hasLoader": e.hasLoader,
+      "hasAction": e.hasAction,
       "hasLoading": e.hasLoading,
       "hasError": e.hasError,
+      "serverFns": serverFnsJson,
       "errorFile": (if e.hasError: "src/" & e.errorModule.filePath & ".nim" else: ""),
       "loadingFile": (if e.hasLoading: "src/" & e.loadingModule.filePath & ".nim" else: ""),
       "loadingPath": (if e.hasLoading: loadingUrlPath(e.urlPath) else: "")
@@ -346,6 +376,91 @@ proc writeRouteManifest*(outDir, appDir: string) =
 
 proc nimStringLiteral(s: string): string =
   $(%s)
+
+proc emitLoaderAndPage(importName, explicitArg, ind: string): string =
+  ## Invoke ``loader`` (optional) then ``page`` into ``res``.
+  result = &"{ind}when compiles({importName}.loader(req)):\n"
+  result &= &"{ind}  when compiles(await {importName}.loader(req)):\n"
+  result &= &"{ind}    let crownLoaderData = await {importName}.loader(req)\n"
+  result &= &"{ind}  else:\n"
+  result &= &"{ind}    let crownLoaderData = {importName}.loader(req)\n"
+  result &= &"{ind}  when compiles({importName}.page(req, crownLoaderData, {explicitArg})):\n"
+  result &= &"{ind}    crownSetRouteResponse(res, {importName}.page(req, crownLoaderData, {explicitArg}))\n"
+  result &= &"{ind}  elif compiles({importName}.page(req, crownLoaderData)):\n"
+  result &= &"{ind}    crownSetRouteResponse(res, {importName}.page(req, crownLoaderData))\n"
+  result &= &"{ind}  elif compiles({importName}.page(req, {explicitArg})):\n"
+  result &= &"{ind}    crownSetRouteResponse(res, {importName}.page(req, {explicitArg}))\n"
+  result &= &"{ind}  else:\n"
+  result &= &"{ind}    crownSetRouteResponse(res, {importName}.page(req))\n"
+  result &= &"{ind}elif compiles({importName}.page(req, {explicitArg})):\n"
+  result &= &"{ind}  crownSetRouteResponse(res, {importName}.page(req, {explicitArg}))\n"
+  result &= &"{ind}elif compiles({importName}.page(req)):\n"
+  result &= &"{ind}  crownSetRouteResponse(res, {importName}.page(req))\n"
+  result &= &"{ind}else:\n"
+  result &= &"{ind}  crownSetRouteResponse(res, {importName}.page(c, p))\n"
+
+proc emitActionBody(importName, explicitArg, ind: string): string =
+  ## Run ``action`` then revalidate ``loader``+``page`` unless the action
+  ## returned a redirect, non-empty HTML, or an explicit ``Response`` body.
+  let d2 = ind & "  "
+  let d4 = ind & "    "
+  let d6 = ind & "      "
+  let d8 = ind & "        "
+  result = &"{ind}when compiles(await {importName}.action(req)):\n"
+  result &= &"{d2}when compiles((discard await {importName}.action(req))):\n"
+  result &= &"{d4}let crownActionOut = await {importName}.action(req)\n"
+  result &= &"{d4}when typeof(crownActionOut) is crown.ActionRevalidate:\n"
+  result &= &"{d6}crownTreatAsPage = true\n"
+  result &= emitLoaderAndPage(importName, explicitArg, d6)
+  result &= &"{d4}elif typeof(crownActionOut) is crown.Response:\n"
+  result &= &"{d6}res = crownActionOut\n"
+  result &= &"{d6}if not res.headers.hasKey(\"Location\") and res.body().len == 0:\n"
+  result &= &"{d8}crownTreatAsPage = true\n"
+  result &= emitLoaderAndPage(importName, explicitArg, d8)
+  result &= &"{d4}elif typeof(crownActionOut) is string:\n"
+  result &= &"{d6}if crownActionOut.len == 0:\n"
+  result &= &"{d8}crownTreatAsPage = true\n"
+  result &= emitLoaderAndPage(importName, explicitArg, d8)
+  result &= &"{d6}else:\n"
+  result &= &"{d8}crownSetRouteResponse(res, crownActionOut)\n"
+  result &= &"{d4}elif typeof(crownActionOut) is Html:\n"
+  result &= &"{d6}crownSetRouteResponse(res, crownActionOut)\n"
+  result &= &"{d4}else:\n"
+  result &= &"{d6}crownSetRouteResponse(res, crownActionOut)\n"
+  result &= &"{d2}else:\n"
+  result &= &"{d4}await {importName}.action(req)\n"
+  result &= &"{d4}crownTreatAsPage = true\n"
+  result &= emitLoaderAndPage(importName, explicitArg, d4)
+  result &= &"{ind}elif compiles({importName}.action(req)):\n"
+  result &= &"{d2}when compiles((discard {importName}.action(req))):\n"
+  result &= &"{d4}let crownActionOut = {importName}.action(req)\n"
+  result &= &"{d4}when typeof(crownActionOut) is crown.ActionRevalidate:\n"
+  result &= &"{d6}discard crownActionOut\n"
+  result &= &"{d6}crownTreatAsPage = true\n"
+  result &= emitLoaderAndPage(importName, explicitArg, d6)
+  result &= &"{d4}elif typeof(crownActionOut) is crown.Response:\n"
+  result &= &"{d6}res = crownActionOut\n"
+  result &= &"{d6}if not res.headers.hasKey(\"Location\") and res.body().len == 0:\n"
+  result &= &"{d8}crownTreatAsPage = true\n"
+  result &= emitLoaderAndPage(importName, explicitArg, d8)
+  result &= &"{d4}elif typeof(crownActionOut) is string:\n"
+  result &= &"{d6}if crownActionOut.len == 0:\n"
+  result &= &"{d8}crownTreatAsPage = true\n"
+  result &= emitLoaderAndPage(importName, explicitArg, d8)
+  result &= &"{d6}else:\n"
+  result &= &"{d8}crownSetRouteResponse(res, crownActionOut)\n"
+  result &= &"{d4}elif typeof(crownActionOut) is Html:\n"
+  result &= &"{d6}crownSetRouteResponse(res, crownActionOut)\n"
+  result &= &"{d4}else:\n"
+  result &= &"{d6}crownSetRouteResponse(res, crownActionOut)\n"
+  result &= &"{d2}else:\n"
+  result &= &"{d4}{importName}.action(req)\n"
+  result &= &"{d4}crownTreatAsPage = true\n"
+  result &= emitLoaderAndPage(importName, explicitArg, d4)
+  result &= &"{ind}elif compiles({importName}.action(c, p)):\n"
+  result &= &"{d2}crownSetRouteResponse(res, {importName}.action(c, p))\n"
+  result &= &"{ind}else:\n"
+  result &= &"{d2}crownSetRouteResponse(res, {importName}.action(req))\n"
 
 proc generateRoutesCode*(appDir: string, isDev: bool = false): string =
   let layouts = discoverLayouts(appDir)
@@ -409,15 +524,22 @@ proc generateRoutesCode*(appDir: string, isDev: bool = false): string =
   var crownIdx = 0
 
   for e in entries:
+    var skipPost = e.hasAction
     for methodTuple in e.methods:
       let m = methodTuple.name
+      if m == "post" and skipPost:
+        continue
       let explicitLayout = methodTuple.layout
-      let httpMethod = if m == "page": "get" else: m
+      let httpMethod =
+        if m == "page": "get"
+        elif m == "action": "post"
+        else: m
       let explicitArg = if explicitLayout != "": "\"" & explicitLayout &
           "\"" else: "\"\""
       let useErrorBoundary = e.errorModule.importName.len > 0
       let ind = if useErrorBoundary: "      " else: "    "
 
+      let treatAsPageLit = if m == "page": "true" else: "false"
       let rn = "crownRoute" & $crownIdx
       inc crownIdx
       routeNames.add(rn)
@@ -426,32 +548,22 @@ proc generateRoutesCode*(appDir: string, isDev: bool = false): string =
       # loader-backed Crown, or pure Basolato handlers.
       code &= &"let {rn} = crownRouteRegister(\"{httpMethod}\", \"{e.urlPath}\"):\n"
       code &= &"    var res: crown.Response\n"
+      code &= &"    var crownTreatAsPage = {treatAsPageLit}\n"
       code &= &"    let req = crown.Request(context: c, params: p)\n"
       if useErrorBoundary:
         code &= "    try:\n"
       if m == "page":
-        code &= &"{ind}when compiles({e.importName}.loader(req)):\n"
-        code &= &"{ind}  when compiles(await {e.importName}.loader(req)):\n"
-        code &= &"{ind}    let crownLoaderData = await {e.importName}.loader(req)\n"
-        code &= &"{ind}  else:\n"
-        code &= &"{ind}    let crownLoaderData = {e.importName}.loader(req)\n"
-        code &= &"{ind}  when compiles({e.importName}.{m}(req, crownLoaderData, {explicitArg})):\n"
-        code &= &"{ind}    crownSetRouteResponse(res, {e.importName}.{m}(req, crownLoaderData, {explicitArg}))\n"
-        code &= &"{ind}  elif compiles({e.importName}.{m}(req, crownLoaderData)):\n"
-        code &= &"{ind}    crownSetRouteResponse(res, {e.importName}.{m}(req, crownLoaderData))\n"
-        code &= &"{ind}  elif compiles({e.importName}.{m}(req, {explicitArg})):\n"
-        code &= &"{ind}    crownSetRouteResponse(res, {e.importName}.{m}(req, {explicitArg}))\n"
-        code &= &"{ind}  else:\n"
-        code &= &"{ind}    crownSetRouteResponse(res, {e.importName}.{m}(req))\n"
-        code &= &"{ind}elif compiles({e.importName}.{m}(req, {explicitArg})):\n"
+        code &= emitLoaderAndPage(e.importName, explicitArg, ind)
+      elif m == "action":
+        code &= emitActionBody(e.importName, explicitArg, ind)
       else:
         code &= &"{ind}when compiles({e.importName}.{m}(req, {explicitArg})):\n"
-      code &= &"{ind}  crownSetRouteResponse(res, {e.importName}.{m}(req, {explicitArg}))\n"
-      code &= &"{ind}elif compiles({e.importName}.{m}(req)):\n"
-      code &= &"{ind}  crownSetRouteResponse(res, {e.importName}.{m}(req))\n"
-      code &= &"{ind}else:\n"
-      code &= &"{ind}  # Fallback to pure Basolato signature for backwards compatibility\n"
-      code &= &"{ind}  crownSetRouteResponse(res, {e.importName}.{m}(c, p))\n"
+        code &= &"{ind}  crownSetRouteResponse(res, {e.importName}.{m}(req, {explicitArg}))\n"
+        code &= &"{ind}elif compiles({e.importName}.{m}(req)):\n"
+        code &= &"{ind}  crownSetRouteResponse(res, {e.importName}.{m}(req))\n"
+        code &= &"{ind}else:\n"
+        code &= &"{ind}  # Fallback to pure Basolato signature for backwards compatibility\n"
+        code &= &"{ind}  crownSetRouteResponse(res, {e.importName}.{m}(c, p))\n"
       if useErrorBoundary:
         let errAlias = e.errorModule.importName
         code &= "    except CatchableError as crownRouteErr:\n"
@@ -468,9 +580,8 @@ proc generateRoutesCode*(appDir: string, isDev: bool = false): string =
       code &= &"    var contentType = \"\"\n"
       code &= &"    if res.headers.hasKey(\"Content-Type\"): contentType = $res.headers[\"Content-Type\"]\n"
       code &= &"    elif res.headers.hasKey(\"content-type\"): contentType = $res.headers[\"content-type\"]\n"
-      let isPage = if m == "page": "true" else: "false"
-      code &= &"    let isLayoutEnabled = {isPage} and not res.headers.hasKey(\"Crown-Disable-Layout\")\n"
-      code &= &"    let isCrownInjectEnabled = {isPage} and not res.headers.hasKey(\"Crown-Disable-Inject\")\n"
+      code &= "    let isLayoutEnabled = crownTreatAsPage and not res.headers.hasKey(\"Crown-Disable-Layout\")\n"
+      code &= "    let isCrownInjectEnabled = crownTreatAsPage and not res.headers.hasKey(\"Crown-Disable-Inject\")\n"
       code &= &"    if contentType.contains(\"text/html\") and (isLayoutEnabled or isCrownInjectEnabled):\n"
       code &= &"      var htmlContent = res.body()\n"
       code &= &"      if isLayoutEnabled:\n"
@@ -513,6 +624,20 @@ proc generateRoutesCode*(appDir: string, isDev: bool = false): string =
       code &= &"    if contentType.contains(\"text/html\") and isCrownInjectEnabled:\n"
       code &= &"      res = htmlResponse(injectCrownSystem(res.body()), res.status)\n"
       code &= &"    return res\n"
+      code &= "\n"
+
+    for fnName in e.serverFns:
+      let rnFn = "crownRoute" & $crownIdx
+      inc crownIdx
+      routeNames.add(rnFn)
+      let fnPath = "/__crown/fn/" & fnName
+      let invoker = "crownServerFn_" & fnName
+      code &= &"let {rnFn} = crownRouteRegister(\"post\", \"{fnPath}\"):\n"
+      code &= &"    let req = crown.Request(context: c, params: p)\n"
+      code &= &"    when compiles(await {e.importName}.{invoker}(req.jsonBody())):\n"
+      code &= &"      return jsonResponse(await {e.importName}.{invoker}(req.jsonBody()))\n"
+      code &= &"    else:\n"
+      code &= &"      return jsonResponse({e.importName}.{invoker}(req.jsonBody()))\n"
       code &= "\n"
 
   if hasNotFound:

@@ -165,11 +165,9 @@ proc buildAndRunServer*(appDir, outDir, mainPath: string): Process =
 
   # Generate PWA Files
   generatePWAFiles()
-
-  # Regenerate routes
+  writeRouteManifest(outDir, appDir)
   let routesCode = generateRoutesCode(appDir, isDev = true)
   writeFile(outDir / "routes.nim", routesCode)
-  writeRouteManifest(outDir, appDir)
 
   let config = loadCrownConfig()
   let port = pickListeningPort(config.port)

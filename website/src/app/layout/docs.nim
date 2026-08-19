@@ -43,6 +43,12 @@ proc layout*(content: string): string =
                 <a href="/docs/routing" class="block px-3 py-2 text-sm text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors">File-System Routing</a>
               </li>
               <li>
+                <a href="/docs/data" class="block px-3 py-2 text-sm text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors">Loader &amp; Action</a>
+              </li>
+              <li>
+                <a href="/docs/server_fn" class="block px-3 py-2 text-sm text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors">Server Functions</a>
+              </li>
+              <li>
                 <a href="/docs/layout_inheritance" class="block px-3 py-2 text-sm text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors">Layout Inheritance</a>
               </li>
               <li>

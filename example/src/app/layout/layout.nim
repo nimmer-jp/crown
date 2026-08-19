@@ -20,6 +20,7 @@ proc layout*(content: string): string =
             
             <nav class="hidden sm:flex items-center gap-8 text-slate-600 font-semibold">
               <a href="/" class="hover:text-indigo-600 transition-colors">Framework</a>
+              <a href="/products" class="hover:text-indigo-600 transition-colors">Products</a>
               <a href="/editor" class="hover:text-indigo-600 transition-colors">Editor Demo</a>
               <a href="/blog/welcome" class="hover:text-indigo-600 transition-colors">Blog</a>
             </nav>

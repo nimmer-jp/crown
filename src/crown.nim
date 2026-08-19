@@ -106,10 +106,10 @@ proc build*(appDir = "src/app", outDir = ".crown") =
   createDir(outDir)
   writeCrownEnvPreserver(outDir)
   generatePWAFiles()
+  writeRouteManifest(outDir, appDir)
   let routesCode = generateRoutesCode(appDir)
   let routesPath = outDir / "routes.nim"
   writeFile(routesPath, routesCode)
-  writeRouteManifest(outDir, appDir)
 
   let config = loadCrownConfig()
   let defaultListen = parseConfigPortInt(config)

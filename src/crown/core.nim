@@ -1,7 +1,11 @@
 import std/macros
 import std/hashes
 import std/strformat
-import std/[httpcore, asyncdispatch, json, os, strutils]
+import std/[httpcore, asyncdispatch, json, os, strutils, tables]
+import ./query
+import ./links
+import ./server_fn
+export query, links, server_fn
 when not (defined(httpbeast) or defined(httpx)):
   import std/asyncnet
 
@@ -53,20 +57,19 @@ proc param*(r: Request, key: string, _: typedesc[JsonNode],
 
 proc bindParams*[T](params: Params, _: typedesc[T]): T =
   ## Bind merged Crown/Basolato params into a plain object.
-  ## Fields not present in the request keep their Nim default value.
+  ## Missing keys keep Nim defaults (including ``query`` field defaults).
+  ## ``Option`` / enum fields are handled by ``bindValues``.
+  var values = initTable[string, string]()
   for fieldName, field in fieldPairs(result):
-    when field is string:
-      field = params.getStr(fieldName, field)
-    elif field is int:
-      field = params.getInt(fieldName, field)
-    elif field is float:
-      field = params.getFloat(fieldName, field)
-    elif field is bool:
-      field = params.getBool(fieldName, field)
-    elif field is JsonNode:
-      field = params.getJson(fieldName, field)
-    else:
-      discard
+    discard field
+    values[fieldName] = params.getStr(fieldName, "")
+  result = bindValues(values, T)
+
+type ActionRevalidate* = object
+  ## Sentinel returned from ``action`` to re-run ``loader`` + ``page``.
+
+proc revalidate*(): ActionRevalidate {.inline.} =
+  ActionRevalidate()
 
 proc paramsAs*[T](r: Request, _: typedesc[T]): T {.inline.} =
   bindParams(r.params, T)

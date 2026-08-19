@@ -11,22 +11,25 @@ proc page*(req: Request): Html =
             <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
             <span class="relative inline-flex rounded-full h-2 w-2 bg-indigo-500"></span>
           </span>
-          v0.1.0 Alpha Released
+          v0.7.0 · Typed Query / Action / serverFn
         </div>
         <h1 class="text-6xl sm:text-7xl font-extrabold tracking-tight text-slate-900">
           The Full-stack <span class="bg-clip-text text-transparent bg-gradient-to-r from-indigo-600 to-violet-600">Nim</span> Framework
         </h1>
         <p class="text-xl text-slate-600 max-w-2xl mx-auto leading-relaxed">
-          Build high-performance, type-safe web applications with the speed of Nim and the simplicity of Next.js. Hypermedia-driven indices, nested layouts, and dynamic routing out of the box.
+          TanStack の型安全性と Remix の Web 標準を、Nim の超高速ビルド・単一バイナリ・ゼロコストマクロで。File-system routing、typed search params、loader / action、serverFn が標準です。
         </p>
         <div class="flex flex-wrap justify-center gap-4">
-          <button class="px-8 py-4 bg-indigo-600 text-white rounded-2xl font-bold text-lg shadow-xl shadow-indigo-200 hover:bg-indigo-700 hover:-translate-y-1 transition-all active:scale-95">
+          <a href="/docs" class="px-8 py-4 bg-indigo-600 text-white rounded-2xl font-bold text-lg shadow-xl shadow-indigo-200 hover:bg-indigo-700 hover:-translate-y-1 transition-all active:scale-95">
             Documentation →
-          </button>
-          <button class="px-8 py-4 bg-white text-slate-900 border border-slate-200 rounded-2xl font-bold text-lg hover:bg-slate-50 transition-all active:scale-95">
+          </a>
+          <a href="https://github.com/valit/crown" class="px-8 py-4 bg-white text-slate-900 border border-slate-200 rounded-2xl font-bold text-lg hover:bg-slate-50 transition-all active:scale-95">
             View on GitHub
-          </button>
+          </a>
         </div>
+        <a href="/blog/crown-0-7" class="inline-block text-indigo-600 font-semibold hover:underline">
+          Crown 0.7 リリースノートを読む →
+        </a>
       </section>
 
       <!-- Demos Grid -->

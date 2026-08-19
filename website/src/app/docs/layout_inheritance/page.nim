@@ -57,11 +57,11 @@ proc page*(req: Request, layout="docs"): string =
 
       <div class="mt-12 pt-8 border-t border-slate-200">
         <div class="flex justify-between items-center">
-          <a href="/docs/routing" class="flex items-center gap-4 group p-4 border border-transparent rounded-2xl hover:bg-slate-50 transition-all">
+          <a href="/docs/server_fn" class="flex items-center gap-4 group p-4 border border-transparent rounded-2xl hover:bg-slate-50 transition-all">
             <div class="text-slate-300 group-hover:text-slate-500 group-hover:-translate-x-1 transition-all text-2xl">←</div>
             <div class="text-left">
               <div class="text-sm text-slate-400 mb-1">Previous</div>
-              <div class="font-bold text-slate-600 group-hover:text-slate-800">File-System Routing</div>
+              <div class="font-bold text-slate-600 group-hover:text-slate-800">Server Functions</div>
             </div>
           </a>
 

@@ -308,6 +308,20 @@ function reraiseException() {
 }
 var objectID_805306546 = [0];
 
+function installCrownServerFn__client_u24() {
+      window.crownServerFn = function (name, payload) {
+    payload = payload || {};
+    return fetch("/__crown/fn/" + name, {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify(payload)
+    }).then(function (r) { return r.json(); });
+  };
+  
+
+  
+}
+
 function isFatPointer__system_u2908(ti_p0) {
   var result_33557342 = false;
 
@@ -354,13 +368,13 @@ function addChars__stdZprivateZdigitsutils_u202(result_p0, result_p0_Idx, x_p1, 
          else {result_p0[result_p0_Idx].length = Temporary1; };
     Label2: {
       var iHEX60gensym4_335544542 = 0;
-      var i_570425679 = 0;
+      var i_570425682 = 0;
       Label3: {
           Label4: while (true) {
-          if (!(i_570425679 < n_p3)) break Label4;
-            iHEX60gensym4_335544542 = i_570425679;
+          if (!(i_570425682 < n_p3)) break Label4;
+            iHEX60gensym4_335544542 = i_570425682;
             result_p0[result_p0_Idx][(old_335544528 + iHEX60gensym4_335544542)] = x_p1.charCodeAt((start_p2 + iHEX60gensym4_335544542));
-            i_570425679 += 1;
+            i_570425682 += 1;
           }
       };
     };
@@ -490,41 +504,59 @@ function raiseIndexError(i_p0, a_p1, b_p2) {
 
   
 }
-async function handleRequest__client_u49(el_p0, methodStr_p1, url_p2) {
-  var result_570425398 = null;
+
+function applyFullDocument__client_u22(html_p0) {
+      (function (html) {
+    var text = String(html);
+    var lower = text.toLowerCase();
+    if (lower.indexOf("<html") !== -1) {
+      document.open();
+      document.write(text);
+      document.close();
+    }
+  })(html_p0);
+  
+
+  
+}
+async function handleRequest__client_u52(el_p0, methodStr_p1, url_p2) {
+  var result_570425401 = null;
 
   BeforeRet: {
-    var targetSel_570425404 = el_p0.getAttribute("crown-target");
-    var swap_570425405 = el_p0.getAttribute("crown-swap");
-    if (((swap_570425405 == null) || (swap_570425405 == ""))) {
-    swap_570425405 = "innerHTML";
+    var targetSel_570425407 = el_p0.getAttribute("crown-target");
+    var swap_570425408 = el_p0.getAttribute("crown-swap");
+    if (((swap_570425408 == null) || (swap_570425408 == ""))) {
+    swap_570425408 = "innerHTML";
     }
     
     el_p0.classList.add("crown-loading");
-    var options_570425406 = {};
-    options_570425406.method = methodStr_p1;
+    var options_570425409 = {};
+    options_570425409.method = methodStr_p1;
     if (((methodStr_p1 == "POST") && (el_p0.nodeName == "FORM"))) {
-    options_570425406.body = new FormData(el_p0);
+    options_570425409.body = new FormData(el_p0);
     }
     
 ++excHandler;
     try {
-    var res_570425436 = (await fetch(url_p2, options_570425406));
-    var txt_570425441 = (await res_570425436.text());
-    if ((!((targetSel_570425404 == null)) && !((targetSel_570425404 == "")))) {
-    var targetNodes_570425442 = document.querySelectorAll(targetSel_570425404);
-    if ((0 < (targetNodes_570425442).length)) {
-    var target_570425450 = targetNodes_570425442[chckIndx(0, 0, (targetNodes_570425442).length - 1)];
-    if ((swap_570425405 == "innerHTML")) {
-    target_570425450.innerHTML = txt_570425441;
+    var res_570425439 = (await fetch(url_p2, options_570425409));
+    var txt_570425444 = (await res_570425439.text());
+    if ((!((targetSel_570425407 == null)) && !((targetSel_570425407 == "")))) {
+    var targetNodes_570425445 = document.querySelectorAll(targetSel_570425407);
+    if ((0 < (targetNodes_570425445).length)) {
+    var target_570425453 = targetNodes_570425445[chckIndx(0, 0, (targetNodes_570425445).length - 1)];
+    if ((swap_570425408 == "innerHTML")) {
+    target_570425453.innerHTML = txt_570425444;
     }
     else {
-    if ((swap_570425405 == "outerHTML")) {
-    target_570425450.outerHTML = txt_570425441;
+    if ((swap_570425408 == "outerHTML")) {
+    target_570425453.outerHTML = txt_570425444;
     }
     }
     }
     
+    }
+    else {
+    applyFullDocument__client_u22(txt_570425444);
     }
     
 --excHandler;
@@ -533,8 +565,8 @@ async function handleRequest__client_u49(el_p0, methodStr_p1, url_p2) {
  lastJSError = EXCEPTION;
  --excHandler;
     if (lastJSError && (lastJSError instanceof Error)) {
-    var err_570425451 = lastJSError;
-    console.error(("Crown API Error:"), (err_570425451));
+    var err_570425454 = lastJSError;
+    console.error(("Crown API Error:"), (err_570425454));
     }
     else {
     	reraiseException();
@@ -543,53 +575,53 @@ async function handleRequest__client_u49(el_p0, methodStr_p1, url_p2) {
     } finally {
     el_p0.classList.remove("crown-loading");
     }
-    result_570425398 = undefined;
+    result_570425401 = undefined;
     break BeforeRet;
   };
 
-  return result_570425398;
+  return result_570425401;
 
 }
 var Temporary1;
 
-function HEX3Aanonymous__client_u241(e_p0) {
+function HEX3Aanonymous__client_u244(e_p0) {
     var Temporary1;
 
-function HEX3Aanonymous__client_u243(e_p0) {
+function HEX3Aanonymous__client_u246(e_p0) {
     var Temporary1;
     var Temporary2;
 
   BeforeRet: {
-    var target_570425589 = e_p0.target;
-    var el_570425590 = target_570425589.closest("[crown-get], [crown-post]");
-    if (!((el_570425590 == null))) {
-    if ((el_570425590.nodeName == "FORM")) {
+    var target_570425592 = e_p0.target;
+    var el_570425593 = target_570425592.closest("[crown-get], [crown-post]");
+    if (!((el_570425593 == null))) {
+    if ((el_570425593.nodeName == "FORM")) {
     break BeforeRet;
     }
     
-    var inputEl_570425595 = el_570425590;
-    if ((((el_570425590.nodeName == "BUTTON") && (inputEl_570425595.type == "submit")) && !((inputEl_570425595.form == null)))) {
+    var inputEl_570425598 = el_570425593;
+    if ((((el_570425593.nodeName == "BUTTON") && (inputEl_570425598.type == "submit")) && !((inputEl_570425598.form == null)))) {
     break BeforeRet;
     }
     
     e_p0.preventDefault();
-    if (el_570425590.hasAttribute("crown-get")) {
+    if (el_570425593.hasAttribute("crown-get")) {
     Temporary1 = "GET";
     }
     else {
     Temporary1 = "POST";
     }
     
-    var methodStr_570425600 = Temporary1;
-    if (el_570425590.hasAttribute("crown-get")) {
-    Temporary2 = el_570425590.getAttribute("crown-get");
+    var methodStr_570425603 = Temporary1;
+    if (el_570425593.hasAttribute("crown-get")) {
+    Temporary2 = el_570425593.getAttribute("crown-get");
     }
     else {
-    Temporary2 = el_570425590.getAttribute("crown-post");
+    Temporary2 = el_570425593.getAttribute("crown-post");
     }
     
-    var url_570425601 = Temporary2;
-    (handleRequest__client_u49(el_570425590, methodStr_570425600, url_570425601));
+    var url_570425604 = Temporary2;
+    (handleRequest__client_u52(el_570425593, methodStr_570425603, url_570425604));
     }
     
   };
@@ -598,43 +630,44 @@ function HEX3Aanonymous__client_u243(e_p0) {
 }
     var Temporary2;
 
-function HEX3Aanonymous__client_u274(e_p0) {
+function HEX3Aanonymous__client_u277(e_p0) {
     var Temporary1;
     var Temporary2;
 
-    var target_570425620 = e_p0.target;
-    var form_570425621 = target_570425620.closest("[crown-get], [crown-post]");
-    if (!((form_570425621 == null))) {
+    var target_570425623 = e_p0.target;
+    var form_570425624 = target_570425623.closest("[crown-get], [crown-post]");
+    if (!((form_570425624 == null))) {
     e_p0.preventDefault();
-    if (form_570425621.hasAttribute("crown-post")) {
+    if (form_570425624.hasAttribute("crown-post")) {
     Temporary1 = "POST";
     }
     else {
     Temporary1 = "GET";
     }
     
-    var methodStr_570425626 = Temporary1;
-    if (form_570425621.hasAttribute("crown-get")) {
-    Temporary2 = form_570425621.getAttribute("crown-get");
+    var methodStr_570425629 = Temporary1;
+    if (form_570425624.hasAttribute("crown-get")) {
+    Temporary2 = form_570425624.getAttribute("crown-get");
     }
     else {
-    Temporary2 = form_570425621.getAttribute("crown-post");
+    Temporary2 = form_570425624.getAttribute("crown-post");
     }
     
-    var url_570425627 = Temporary2;
-    (handleRequest__client_u49(form_570425621, methodStr_570425626, url_570425627));
+    var url_570425630 = Temporary2;
+    (handleRequest__client_u52(form_570425624, methodStr_570425629, url_570425630));
     }
     
 
   
 }
 
-    Temporary1 = HEX3Aanonymous__client_u243.bind(null); Temporary1.ClP_0 = HEX3Aanonymous__client_u243; Temporary1.ClE_0 = null;
+    installCrownServerFn__client_u24();
+    Temporary1 = HEX3Aanonymous__client_u246.bind(null); Temporary1.ClP_0 = HEX3Aanonymous__client_u246; Temporary1.ClE_0 = null;
     document.addEventListener("click", Temporary1, false);
-    Temporary2 = HEX3Aanonymous__client_u274.bind(null); Temporary2.ClP_0 = HEX3Aanonymous__client_u274; Temporary2.ClE_0 = null;
+    Temporary2 = HEX3Aanonymous__client_u277.bind(null); Temporary2.ClP_0 = HEX3Aanonymous__client_u277; Temporary2.ClE_0 = null;
     document.addEventListener("submit", Temporary2, false);
 
   
 }
-Temporary1 = HEX3Aanonymous__client_u241.bind(null); Temporary1.ClP_0 = HEX3Aanonymous__client_u241; Temporary1.ClE_0 = null;
+Temporary1 = HEX3Aanonymous__client_u244.bind(null); Temporary1.ClP_0 = HEX3Aanonymous__client_u244; Temporary1.ClE_0 = null;
 document.addEventListener("DOMContentLoaded", Temporary1, false);

@@ -28,6 +28,20 @@ proc page*(req: Request, layout="docs"): string =
       </ul>
       <p class="mb-4">パラメータは <code>req.param("id", int)</code> や <code>req.search(MyInput)</code> で読めます。ルート横の <code>error.nim</code> / <code>loading.nim</code> はそれぞれエラー境界と <code>&#123;path&#125;/__loading</code> フラグメントになります。</p>
 
+      <h3 class="text-xl font-bold text-slate-900 mt-8 mb-4">Typed Search Params</h3>
+      <p class="mb-4">クエリ文字列は <code>query</code> マクロでコンパイル時に型付けします。欠落時はフィールドのデフォルト、<code>Option</code> は <code>none</code>、<code>choice(asc, desc)</code> はインライン enum になります。</p>
+      <div class="bg-slate-900 rounded-xl p-6 text-slate-300 font-mono text-sm overflow-x-auto shadow-inner mb-6 whitespace-pre leading-relaxed">        query ProductsQuery:
+          page: int = 1
+          sort: choice(asc, desc) = desc
+          filter: Option[string]
+
+        proc page*(req: Request): string =
+          let q = req.search(ProductsQuery)
+          # q.page は int。URL の抽出と変換はマクロがゼロコスト生成</div>
+
+      <h3 class="text-xl font-bold text-slate-900 mt-8 mb-4">Typed Links</h3>
+      <p class="mb-4">ルートマニフェストから <code>hrefUsers(id: int)</code> のようなヘルパーが生成されます。クエリ付き URL は <code>href("/products", q)</code> / <code>withQuery</code> です。文字列結合によるリンク切れはコンパイルエラーになります。</p>
+
       <div class="mt-12 pt-8 border-t border-slate-200">
         <div class="flex justify-between items-center">
           <a href="/docs" class="flex items-center gap-4 group p-4 border border-transparent rounded-2xl hover:bg-slate-50 transition-all">
@@ -38,10 +52,10 @@ proc page*(req: Request, layout="docs"): string =
             </div>
           </a>
 
-          <a href="/docs/layout_inheritance" class="flex items-center gap-4 group p-4 border border-slate-200 rounded-2xl hover:border-indigo-300 hover:shadow-md transition-all">
+          <a href="/docs/data" class="flex items-center gap-4 group p-4 border border-slate-200 rounded-2xl hover:border-indigo-300 hover:shadow-md transition-all">
             <div class="text-right">
               <div class="text-sm text-slate-400 mb-1">Next Topic</div>
-              <div class="font-bold text-indigo-600 group-hover:text-indigo-700">Layout Inheritance</div>
+              <div class="font-bold text-indigo-600 group-hover:text-indigo-700">Loader &amp; Action</div>
             </div>
             <div class="text-slate-300 group-hover:text-indigo-500 group-hover:translate-x-1 transition-all text-2xl">→</div>
           </a>

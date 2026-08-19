@@ -13,10 +13,14 @@ proc layout*(content: string): string =
           const docs = [
             { title: 'Getting Started', url: '/docs', desc: 'Installation and setup guide for Crown Framework.' },
             { title: 'File-System Routing', url: '/docs/routing', desc: 'Learn how routes map to files in the src/app directory.' },
+            { title: 'Loader & Action', url: '/docs/data', desc: 'Remix-style loaders, actions, and automatic revalidation.' },
+            { title: 'Server Functions', url: '/docs/server_fn', desc: 'Typed RPC between the browser and the Nim server.' },
             { title: 'Layout Inheritance', url: '/docs/layout_inheritance', desc: 'Compose complex UIs naturally with deeply nested layouts.' },
             { title: 'Native Client Sync', url: '/docs/interactivity', desc: 'Add interactive features with HTMX-like custom attributes.' },
             { title: 'API Routes', url: '/api/save', desc: 'Create JSON endpoints alongside your pages.' },
-            { title: 'Editor Demo', url: '/editor', desc: 'Try the nested layout and state preservation demo.' }
+            { title: 'Editor Demo', url: '/editor', desc: 'Try the nested layout and state preservation demo.' },
+            { title: 'Blog', url: '/blog', desc: 'Release notes and writing from the Crown team.' },
+            { title: 'Crown 0.7', url: '/blog/crown-0-7', desc: 'Typed Query, Action, and serverFn.' },
           ];
 
           const openSearch = () => {
@@ -111,7 +115,7 @@ proc layout*(content: string): string =
             <nav class="hidden sm:flex items-center gap-8 text-slate-600 font-semibold">
               <a href="/docs" class="hover:text-indigo-600 transition-colors">Documentation</a>
               <a href="/editor" class="hover:text-indigo-600 transition-colors">Editor Demo</a>
-              <a href="/blog/welcome" class="hover:text-indigo-600 transition-colors">Blog</a>
+              <a href="/blog" class="hover:text-indigo-600 transition-colors">Blog</a>
             </nav>
 
             <div class="flex items-center gap-4">
@@ -121,7 +125,7 @@ proc layout*(content: string): string =
                   <kbd>⌘</kbd><kbd>K</kbd>
                 </div>
               </button>
-              <button class="hidden sm:block px-4 py-2 bg-slate-900 text-white rounded-full hover:bg-slate-800 transition-all shadow-md hover:shadow-lg active:scale-95">Get Started</button>
+              <a href="/docs" class="hidden sm:block px-4 py-2 bg-slate-900 text-white rounded-full hover:bg-slate-800 transition-all shadow-md hover:shadow-lg active:scale-95">Get Started</a>
             </div>
           </div>
         </header>
@@ -141,8 +145,8 @@ proc layout*(content: string): string =
             </div>
             <div class="flex gap-6 text-slate-400 font-medium">
               <a href="/docs" class="hover:text-slate-600 transition-colors">Documentation</a>
-              <a href="#" class="hover:text-slate-600 transition-colors">GitHub</a>
-              <a href="#" class="hover:text-slate-600 transition-colors">Twitter</a>
+              <a href="/blog" class="hover:text-slate-600 transition-colors">Blog</a>
+              <a href="https://github.com/valit/crown" class="hover:text-slate-600 transition-colors">GitHub</a>
             </div>
           </div>
         </footer>
